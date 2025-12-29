@@ -81,47 +81,112 @@ class DashboardBridge:
         @self.app.get("/api/servers")
         async def get_servers(token: str):
             if not token or token not in self.tokens:
-                print(f"[AUTH] Invalid or missing token: {token}")
+                print(f"[AUTH] ❌ Invalid or missing token")
                 raise HTTPException(401, "Session expired or invalid")
             
-            # Get User Guilds
-            headers = {'Authorization': f'Bearer {token}'}
-            try:
-                r = await self.http_client.get("https://discord.com/api/users/@me/guilds", headers=headers)
-                if r.status_code != 200:
-                    print(f"[DISCORD API] Failed to fetch guilds: {r.status_code} - {r.text}")
-                    raise HTTPException(r.status_code, "Failed to sync with Discord")
-                
-                user_guilds = r.json()
-                if not isinstance(user_guilds, list):
-                    print(f"[DISCORD API] Unexpected response format: {user_guilds}")
-                    return []
-
-                servers = []
-                for g in user_guilds:
-                    try:
-                        guild_id = int(g['id'])
-                        discord_guild = self.bot.get_guild(guild_id)
-                        
-                        perms = int(g['permissions'])
-                        has_manage = (perms & 0x20) == 0x20 or (perms & 0x8) == 0x8
-                        
-                        servers.append({
-                            "id": g['id'],
-                            "name": g['name'],
-                            "icon": g['icon'],
-                            "bot_in": discord_guild is not None,
-                            "has_access": has_manage,
-                            "permissions": perms
-                        })
-                    except (KeyError, ValueError) as entry_err:
-                        print(f"[SKIP] Bad guild entry: {entry_err}")
+            print(f"[SERVERS] 🔍 Fetching guilds from Discord...")
+            
+            # Retry mechanism with exponential backoff
+            max_retries = 3
+            base_delay = 1
+            
+            for attempt in range(max_retries):
+                try:
+                    headers = {'Authorization': f'Bearer {token}'}
+                    
+                    # Add timeout to prevent hanging
+                    r = await asyncio.wait_for(
+                        self.http_client.get("https://discord.com/api/users/@me/guilds", headers=headers),
+                        timeout=10.0
+                    )
+                    
+                    print(f"[DISCORD API] Response status: {r.status_code}")
+                    
+                    # Handle specific error cases
+                    if r.status_code == 401:
+                        print(f"[DISCORD API] ❌ Token expired or invalid")
+                        raise HTTPException(401, "Discord session expired. Please login again.")
+                    
+                    elif r.status_code == 429:
+                        # Rate limited
+                        retry_after = int(r.headers.get('Retry-After', base_delay * (2 ** attempt)))
+                        print(f"[DISCORD API] ⏳ Rate limited. Retry after {retry_after}s...")
+                        if attempt < max_retries - 1:
+                            await asyncio.sleep(retry_after)
+                            continue
+                        raise HTTPException(429, "Discord API rate limit. Please try again later.")
+                    
+                    elif r.status_code != 200:
+                        error_text = r.text[:200] if r.text else "Unknown error"
+                        print(f"[DISCORD API] ❌ Status {r.status_code}: {error_text}")
+                        if attempt < max_retries - 1:
+                            delay = base_delay * (2 ** attempt)
+                            print(f"[RETRY] Attempt {attempt + 1}/{max_retries}, waiting {delay}s...")
+                            await asyncio.sleep(delay)
+                            continue
+                        raise HTTPException(r.status_code, f"Discord API error: {error_text}")
+                    
+                    # Success - parse response
+                    user_guilds = r.json()
+                    
+                    if not isinstance(user_guilds, list):
+                        print(f"[DISCORD API] ⚠️ Unexpected response format: {type(user_guilds)}")
+                        # Try to extract error message if it's a dict
+                        if isinstance(user_guilds, dict):
+                            error_msg = user_guilds.get('message', 'Unknown format')
+                            raise HTTPException(500, f"Discord returned error: {error_msg}")
+                        return []
+                    
+                    print(f"[SERVERS] ✅ Found {len(user_guilds)} guilds")
+                    
+                    servers = []
+                    for g in user_guilds:
+                        try:
+                            guild_id = int(g['id'])
+                            discord_guild = self.bot.get_guild(guild_id)
+                            
+                            perms = int(g.get('permissions', 0))
+                            has_manage = (perms & 0x20) == 0x20 or (perms & 0x8) == 0x8
+                            
+                            servers.append({
+                                "id": g['id'],
+                                "name": g.get('name', 'Unknown Server'),
+                                "icon": g.get('icon'),
+                                "bot_in": discord_guild is not None,
+                                "has_access": has_manage,
+                                "permissions": perms
+                            })
+                        except (KeyError, ValueError) as entry_err:
+                            print(f"[SKIP] ⚠️ Bad guild entry: {entry_err}")
+                            continue
+                    
+                    print(f"[SERVERS] ✅ Returning {len(servers)} processed servers")
+                    return servers
+                    
+                except asyncio.TimeoutError:
+                    print(f"[DISCORD API] ⏱️ Request timeout (attempt {attempt + 1}/{max_retries})")
+                    if attempt < max_retries - 1:
+                        delay = base_delay * (2 ** attempt)
+                        print(f"[RETRY] Waiting {delay}s before retry...")
+                        await asyncio.sleep(delay)
                         continue
-                
-                return servers
-            except Exception as e:
-                print(f"[SYSTEM ERROR] get_servers failed: {e}")
-                raise HTTPException(500, str(e))
+                    raise HTTPException(504, "Discord API timeout. Please try again.")
+                    
+                except HTTPException:
+                    # Re-raise HTTP exceptions as-is
+                    raise
+                    
+                except Exception as e:
+                    print(f"[SYSTEM ERROR] ❌ Unexpected error: {type(e).__name__}: {str(e)}")
+                    if attempt < max_retries - 1:
+                        delay = base_delay * (2 ** attempt)
+                        print(f"[RETRY] Attempt {attempt + 1}/{max_retries}, waiting {delay}s...")
+                        await asyncio.sleep(delay)
+                        continue
+                    raise HTTPException(500, f"Internal error: {str(e)}")
+            
+            # Should never reach here, but just in case
+            raise HTTPException(500, "Failed after all retry attempts")
 
         @self.app.get("/health")
         async def health_check():
