@@ -80,31 +80,48 @@ class DashboardBridge:
 
         @self.app.get("/api/servers")
         async def get_servers(token: str):
-            if token not in self.tokens: raise HTTPException(401)
+            if not token or token not in self.tokens:
+                print(f"[AUTH] Invalid or missing token: {token}")
+                raise HTTPException(401, "Session expired or invalid")
             
             # Get User Guilds
             headers = {'Authorization': f'Bearer {token}'}
-            r = await self.http_client.get("https://discord.com/api/users/@me/guilds", headers=headers)
-            user_guilds = r.json()
-            
-            servers = []
-            for g in user_guilds:
-                # Check if bot is in this guild and user has MANAGE_GUILD (0x20) or ADMIN (0x8)
-                guild_id = int(g['id'])
-                discord_guild = self.bot.get_guild(guild_id)
+            try:
+                r = await self.http_client.get("https://discord.com/api/users/@me/guilds", headers=headers)
+                if r.status_code != 200:
+                    print(f"[DISCORD API] Failed to fetch guilds: {r.status_code} - {r.text}")
+                    raise HTTPException(r.status_code, "Failed to sync with Discord")
                 
-                perms = int(g['permissions'])
-                has_manage = (perms & 0x20) == 0x20 or (perms & 0x8) == 0x8
+                user_guilds = r.json()
+                if not isinstance(user_guilds, list):
+                    print(f"[DISCORD API] Unexpected response format: {user_guilds}")
+                    return []
+
+                servers = []
+                for g in user_guilds:
+                    try:
+                        guild_id = int(g['id'])
+                        discord_guild = self.bot.get_guild(guild_id)
+                        
+                        perms = int(g['permissions'])
+                        has_manage = (perms & 0x20) == 0x20 or (perms & 0x8) == 0x8
+                        
+                        servers.append({
+                            "id": g['id'],
+                            "name": g['name'],
+                            "icon": g['icon'],
+                            "bot_in": discord_guild is not None,
+                            "has_access": has_manage,
+                            "permissions": perms
+                        })
+                    except (KeyError, ValueError) as entry_err:
+                        print(f"[SKIP] Bad guild entry: {entry_err}")
+                        continue
                 
-                servers.append({
-                    "id": g['id'],
-                    "name": g['name'],
-                    "icon": g['icon'],
-                    "bot_in": discord_guild is not None,
-                    "has_access": has_manage,
-                    "permissions": perms
-                })
-            return servers
+                return servers
+            except Exception as e:
+                print(f"[SYSTEM ERROR] get_servers failed: {e}")
+                raise HTTPException(500, str(e))
 
         @self.app.get("/health")
         async def health_check():
