@@ -542,7 +542,7 @@ async def get_bot_status():
                 continue
 
     # If we are the manager (no bot_instance), we need to ask the bot if IT is ready
-    bot_ready = bot_instance is not None
+    bot_ready = bot_instance is not None and bot_instance.is_ready()
     if not bot_ready and is_running:
         try:
             # Ping the bot's internal API to see if it's fully loaded
