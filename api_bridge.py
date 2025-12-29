@@ -299,11 +299,11 @@ async def get_servers(token: str):
                 else:
                     print(f"[DEBUG] Member {user_id} found in neither cache nor API for guild {guild_id}")
                 
-                # Full dashboard access restricted to users with the role
-                if has_dj_role or is_admin:
-                    guild["bot_in"] = True
-                    guild["has_access"] = has_dj_role or is_admin
-                    managed_guilds.append(guild)
+                # Include guild in list but mark access
+                guild["bot_in"] = True
+                guild["has_access"] = has_dj_role or is_admin
+                managed_guilds.append(guild)
+                
             elif is_admin:
                 # If bot not in, but user is admin, they might want to invite it
                 guild["bot_in"] = False

@@ -99,25 +99,51 @@ async function renderServers(servers) {
         servers.forEach(server => {
             const card = document.createElement('div');
             card.className = 'server-card glass neon-border';
+            if (!server.has_access && server.bot_in) card.classList.add('locked');
+
             const iconUrl = server.icon
                 ? `https://cdn.discordapp.com/icons/${server.id}/${server.icon}.png`
                 : 'https://cdn.discordapp.com/embed/avatars/0.png';
 
+            let actionHtml = '';
+            if (server.bot_in) {
+                if (server.has_access) {
+                    actionHtml = `<button class="btn-neon-main" id="btn-manage-${server.id}">OPEN COMMAND PANEL</button>`;
+                } else {
+                    actionHtml = `
+                        <div class="locked-msg neon-text-red">
+                            <i class="fas fa-lock"></i> MISSING ROLE
+                        </div>
+                        <p class="role-instruction">Ask owner for role:</p>
+                        <button class="btn-neon-outline copy-role-btn" onclick="copyRole(this)">
+                            <i class="fas fa-copy"></i> 🎧 | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑
+                        </button>
+                    `;
+                }
+            } else {
+                actionHtml = '<button class="btn-neon-secondary invite-btn">INVITE STATION</button>';
+            }
+
             card.innerHTML = `
                 <img class="server-icon" src="${iconUrl}" alt="">
                 <h3 class="neon-text-blue">${server.name}</h3>
-                ${server.bot_in
-                    ? '<button class="btn-neon-main" id="btn-manage-' + server.id + '">OPEN COMMAND PANEL</button>'
-                    : '<button class="btn-neon-secondary invite-btn">INVITE STATION</button>'}
+                ${actionHtml}
             `;
 
-            if (server.bot_in) {
-                card.onclick = () => {
+            if (server.bot_in && server.has_access) {
+                card.onclick = (e) => {
+                    if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
                     const btn = document.getElementById('btn-manage-' + server.id);
                     btn.innerHTML = '<i class="fas fa-atom fa-spin"></i> SYNCING...';
                     openControlPanel(server);
                 };
-            } else {
+                // Make the button clickable too
+                const btn = card.querySelector(`#btn-manage-${server.id}`);
+                if (btn) btn.onclick = () => {
+                    btn.innerHTML = '<i class="fas fa-atom fa-spin"></i> SYNCING...';
+                    openControlPanel(server);
+                };
+            } else if (!server.bot_in) {
                 card.querySelector('.invite-btn').onclick = (e) => {
                     e.stopPropagation();
                     const clientId = "1451230914561577232";
@@ -599,4 +625,21 @@ async function fetchAPI(endpoint, method = 'GET') {
         throw new Error(data.detail || data.error || "Request failed");
     }
     return data;
+}
+
+function copyRole(btn) {
+    const roleName = "🎧 | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑";
+    navigator.clipboard.writeText(roleName).then(() => {
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check"></i> COPIED!';
+        btn.classList.add('btn-success');
+        setTimeout(() => {
+            btn.innerHTML = originalHtml;
+            btn.classList.remove('btn-success');
+        }, 2000);
+    }).catch(err => {
+        console.error('Failed to copy: ', err);
+        btn.innerHTML = '<i class="fas fa-times"></i> ERROR';
+        setTimeout(() => btn.innerHTML = '<i class="fas fa-copy"></i> 🎧 | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑', 2000);
+    });
 }
