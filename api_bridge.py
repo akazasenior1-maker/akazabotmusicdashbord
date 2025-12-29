@@ -566,13 +566,16 @@ async def get_bot_status():
 async def start_bot(token: str):
     user = await verify_token(token)
     
-    # Restrict to Administrator only (across all guilds or just globally)
-    # Check if the user is an admin in ANY guild the bot manages
-    managed_guilds = await get_servers(token)
-    is_admin = any(g.get("permissions", 0) & 0x8 for g in managed_guilds)
-    
-    if not is_admin:
-        raise HTTPException(status_code=403, detail="Only server administrators can start the bot.")
+    # If OWNER_ID is set, strict check
+    if config.OWNER_ID:
+        if str(user["id"]) != str(config.OWNER_ID):
+             raise HTTPException(status_code=403, detail="Security Restrictions: Only the Bot Owner can start the system.")
+    else:
+        # Fallback to Admin check if owner not configured
+        managed_guilds = await get_servers(token)
+        is_admin = any(g.get("permissions", 0) & 0x8 for g in managed_guilds)
+        if not is_admin:
+            raise HTTPException(status_code=403, detail="Only server administrators can start the bot.")
     global bot_process
     
     status = await get_bot_status()
@@ -600,12 +603,16 @@ async def start_bot(token: str):
 async def stop_bot(token: str):
     user = await verify_token(token)
     
-    # Restrict to Administrator only
-    managed_guilds = await get_servers(token)
-    is_admin = any(g.get("permissions", 0) & 0x8 for g in managed_guilds)
-    
-    if not is_admin:
-        raise HTTPException(status_code=403, detail="Only server administrators can stop the bot.")
+    # If OWNER_ID is set, strict check
+    if config.OWNER_ID:
+        if str(user["id"]) != str(config.OWNER_ID):
+             raise HTTPException(status_code=403, detail="Security Restrictions: Only the Bot Owner can restart the system.")
+    else:
+        # Fallback to Admin check if owner not configured
+        managed_guilds = await get_servers(token)
+        is_admin = any(g.get("permissions", 0) & 0x8 for g in managed_guilds)
+        if not is_admin:
+            raise HTTPException(status_code=403, detail="Only server administrators can stop the bot.")
     global bot_process, bot_instance
     
     stopped = False

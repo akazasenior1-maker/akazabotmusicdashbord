@@ -9,3 +9,6 @@ CLIENT_SECRET = os.environ.get("CLIENT_SECRET", "YOUR_CLIENT_SECRET_HERE")
 # For production (Render), set REDIRECT_URI in environment variables.
 # Example: https://your-site.onrender.com/auth/callback
 REDIRECT_URI = os.environ.get("REDIRECT_URI", "http://localhost:8000/auth/callback")
+
+# Bot Owner ID (For restricting dangerous actions like restart)
+OWNER_ID = os.environ.get("OWNER_ID", "")
