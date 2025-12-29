@@ -1,12 +1,4 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-import httpx
-import asyncio
-import json
-import time
-from typing import Dict, List
-from .config import CLIENT_ID, CLIENT_SECRET, REDIRECT_URI
+from fastapi.responses import RedirectResponse
 
 class DashboardBridge:
     def __init__(self, bot):
@@ -40,7 +32,7 @@ class DashboardBridge:
                 f"?client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}"
                 f"&response_type=code&scope=identify%20guilds"
             )
-            return {"url": auth_url}
+            return RedirectResponse(url=auth_url)
 
         @self.app.get("/auth/callback")
         async def callback(code: str):
