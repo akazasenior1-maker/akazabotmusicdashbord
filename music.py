@@ -27,18 +27,20 @@ ydl_opts_base = {
     "no_color": True,
     "no_playlist": True,
     "default_search": "ytsearch",
-    "socket_timeout": 15,
+    "socket_timeout": 20,
     "cachedir": False,
     "http_headers": {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    }
+    },
+    # Extracted VisitorData to mimic a real browser session
+    "visitor_data": "CgtqbkZNQVdRUEZ6cyj5hMjKBjIKCgJUThIEGgAgWmLfAgrcAjE0LllUPVJCUUV5Y0lzT2VGb01vT29rOFd2NDBTX2Nld1RJVkNjT1A4VVRWSXk4OGxmRy1nZGxWZFVWd2x4dER1cEZfUEJReU5WajVEbXBaajhLcGxqaExKM3lIWl9ySGNXalhSSEd2ZVJ6elVHVDFIdGlmYzJGcXk5OG9vUlQ2LWxXMnlvSmNrY0tWTmtwamdLcF92RlVySWY4YXo3TjB6R2k3WF9KM2FpVHpCdW5RdTEyUlJIWGwySVh5cUkzQ0NnczIwSE9NM0NNRldRVGgwSS0xQ2owUXR5ZDY2RlZHV3cxLVI1bkFlTzF4MXBMRkFCVTViYjhwNnNHYTQ1N2pNMUIzSlRzYUI1aEhSdnVXZ2V0V0tPaXFaREJZWGQ1UUp5WVVXSGlkaWlUUFFyNmllSS13ekdvRWFjMzVkd0x3dDNGMzQzbTNqeTJNWnktSlU0R3ZvczBFeHBPdw=="
 }
 
-# Advanced Evasion Clients
+# Advanced Evasion Clients - Order matters for Render
 extraction_clients = [
-    {"extractor_args": {"youtube": {"client": ["android", "ios"]}}}, # Mobile first (usually less restricted)
-    {"extractor_args": {"youtube": {"client": ["web"]}}},            # Standard web
-    {"extractor_args": {"youtube": {"client": ["mweb"]}}},           # Mobile web fallback
+    {"extractor_args": {"youtube": {"client": ["tvhtml5", "web_creator"]}}}, # TV/Creator clients have much lower bot detection
+    {"extractor_args": {"youtube": {"client": ["android", "ios"]}}},        # Mobile (good fallback)
+    {"extractor_args": {"youtube": {"client": ["mweb", "web"]}}},            # Standards (last resort)
 ]
 
 # Check for cookies.txt to bypass "bot detection" on Render
