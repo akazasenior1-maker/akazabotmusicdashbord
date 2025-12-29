@@ -10,6 +10,9 @@ let stats = { total_played: 0, tracks: {} };
 let isDraggingVolume = false;
 let eqDebounceTimer = null;
 let botStatusInterval = null;
+let wsReconnectAttempts = 0;
+const MAX_WS_RECONNECT_S = 30;
+let lastSyncTime = 0;
 
 function debounce(func, wait) {
     return function executedFunction(...args) {
@@ -92,7 +95,7 @@ async function renderServers(servers) {
         container.innerHTML = '';
 
         if (servers.length === 0) {
-            container.innerHTML = '<div class="no-access glass neon-border"><i class="fas fa-lock"></i> <p>ACCESS DENIED: Required role "🎧 | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑" not detected.</p></div>';
+            container.innerHTML = '<div class="no-access glass neon-border"><i class="fas fa-lock"></i> <p>ACCESS DENIED: Required role "⚛ | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑" not detected.</p></div>';
             return;
         }
 
@@ -126,7 +129,7 @@ async function renderServers(servers) {
                         </div>
                         <p class="role-instruction">Ask owner for role:</p>
                         <button class="btn-neon-outline copy-role-btn" onclick="copyRole(this)">
-                            <i class="fas fa-copy"></i> 🎧 | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑
+                            <i class="fas fa-copy"></i> ⚛ | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑
                         </button>
                     `;
                 }
@@ -180,6 +183,12 @@ function connectWebSocket(guildId) {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(`${protocol}//${window.location.host}/ws/${guildId}`);
 
+    ws.onopen = () => {
+        console.log("WS Uplink Established");
+        wsReconnectAttempts = 0;
+        document.querySelector('.player-card-neon').classList.add('visualizing');
+    };
+
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         updateUI(data);
@@ -187,9 +196,16 @@ function connectWebSocket(guildId) {
 
     ws.onclose = () => {
         if (currentGuildId === guildId) {
-            console.log("WS Reconnecting...");
-            setTimeout(() => connectWebSocket(guildId), 3000);
+            const delay = Math.min(Math.pow(2, wsReconnectAttempts) * 1000, MAX_WS_RECONNECT_S * 1000);
+            console.log(`WS connection lost. Retrying in ${delay / 1000}s...`);
+            wsReconnectAttempts++;
+            setTimeout(() => connectWebSocket(guildId), delay);
         }
+        document.querySelector('.player-card-neon').classList.remove('visualizing');
+    };
+
+    ws.onerror = (err) => {
+        console.error("WS Engine Error", err);
     };
 }
 
@@ -223,12 +239,10 @@ function updateUI(status) {
         document.querySelector('.time-total').textContent = formatTime(currentSongDuration);
 
         lastSyncElapsed = status.elapsed || 0;
+        lastSyncTime = Date.now();
         isPaused = status.is_paused;
 
-        const percent = (lastSyncElapsed / currentSongDuration) * 100;
-        document.getElementById('progress-fill').style.width = `${percent}%`;
-        document.querySelector('.time-current').textContent = formatTime(lastSyncElapsed);
-
+        updateProgressUI();
         startProgressTimer();
     } else {
         stopProgressTimer();
@@ -236,7 +250,7 @@ function updateUI(status) {
         document.getElementById('song-requester').querySelector('span').textContent = "None";
         document.getElementById('song-thumbnail').src = 'https://via.placeholder.com/300/1a1a1a/00f2ff?text=AKAZA+MUSIC';
         document.querySelector('.time-total').textContent = "0:00";
-        document.getElementById('progress-fill').style.width = '0%';
+        updateProgressUI(0);
         document.querySelector('.time-current').textContent = "0:00";
     }
 
@@ -388,17 +402,47 @@ async function sendControl(action, params = {}) {
         action = isPausedBtn ? 'resume' : 'pause';
     }
 
-    params.token = currentToken;
-    const res = await fetch(`${API_URL}/api/server/${currentGuildId}/control?action=${action}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(params)
-    });
+    // Identify triggering element if possible (for visual feedback)
+    let triggerBtn = null;
+    if (action === 'play') triggerBtn = document.getElementById('btn-play-submit');
+    else if (action === 'pause' || action === 'resume') triggerBtn = document.getElementById('btn-pause');
+    else if (action === 'skip') triggerBtn = document.getElementById('btn-skip');
+    else if (action === 'stop') triggerBtn = document.getElementById('btn-stop');
+    else if (action === 'leave') triggerBtn = document.getElementById('btn-leave');
 
-    if (!res.ok) {
-        const err = await res.json();
-        alert(`ERROR: ${err.detail}`);
-        throw new Error(err.detail);
+    if (triggerBtn) {
+        triggerBtn.classList.add('loading');
+        triggerBtn.disabled = true;
+    }
+
+    try {
+        params.token = currentToken;
+        const res = await fetch(`${API_URL}/api/server/${currentGuildId}/control?action=${action}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params)
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || "Signal Rejected");
+        }
+
+        // Optimistic UI for some actions
+        if (action === 'pause') isPaused = true;
+        if (action === 'resume') isPaused = false;
+
+    } catch (err) {
+        console.error(`Control Error [${action}]:`, err);
+        addSystemLog(`Command Failed: ${err.message}`, "error");
+        alert(`UPLINK FAILURE: ${err.message}`);
+    } finally {
+        if (triggerBtn) {
+            setTimeout(() => {
+                triggerBtn.classList.remove('loading');
+                triggerBtn.disabled = false;
+            }, 500); // Small cooldown to prevent spam
+        }
     }
 }
 
@@ -412,16 +456,24 @@ function formatTime(seconds) {
 
 // Progress Engine
 let progressTimer = null;
+function updateProgressUI(forcedElapsed = null) {
+    const elapsed = forcedElapsed !== null ? forcedElapsed : (isPaused ? lastSyncElapsed : lastSyncElapsed + (Date.now() - lastSyncTime) / 1000);
+    const safeElapsed = Math.min(elapsed, currentSongDuration);
+    const percent = currentSongDuration > 0 ? (safeElapsed / currentSongDuration) * 100 : 0;
+
+    const fill = document.getElementById('progress-fill');
+    const timeCurr = document.querySelector('.time-current');
+
+    if (fill) fill.style.width = `${percent}%`;
+    if (timeCurr) timeCurr.textContent = formatTime(safeElapsed);
+}
+
 function startProgressTimer() {
     if (progressTimer) clearInterval(progressTimer);
     progressTimer = setInterval(() => {
         if (isPaused) return;
-        lastSyncElapsed += 1;
-        if (lastSyncElapsed > currentSongDuration) lastSyncElapsed = currentSongDuration;
-        const percent = (lastSyncElapsed / currentSongDuration) * 100;
-        document.getElementById('progress-fill').style.width = `${percent}%`;
-        document.querySelector('.time-current').textContent = formatTime(lastSyncElapsed);
-    }, 1000);
+        updateProgressUI();
+    }, 100); // Smoother high-frequency updates
 }
 
 function stopProgressTimer() {
@@ -615,11 +667,11 @@ function setupWaveform() {
     canvas.width = 300;
     canvas.height = 300;
     waveformArr = [];
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 40; i++) { // Increase density
         waveformArr.push({
-            angle: (i / 30) * Math.PI * 2,
-            length: 10 + Math.random() * 20,
-            speed: 0.05 + Math.random() * 0.1
+            angle: (i / 40) * Math.PI * 2,
+            length: 15 + Math.random() * 25,
+            phase: Math.random() * Math.PI * 2
         });
     }
     animateWaveform();
@@ -629,23 +681,35 @@ function animateWaveform() {
     if (!ctx) return;
     ctx.clearRect(0, 0, 300, 300);
     const isPlaying = !isPaused && document.querySelector('.player-card-neon').classList.contains('visualizing');
+    const time = Date.now() / 1000;
 
-    ctx.strokeStyle = isPlaying ? '#00f2ff' : '#444';
-    ctx.lineWidth = 3;
     ctx.lineCap = 'round';
 
     waveformArr.forEach((p, i) => {
-        const noise = isPlaying ? Math.sin(Date.now() / 100 + i) * 15 : 0;
-        const currentLen = p.length + noise;
+        const pulse = isPlaying ? Math.sin(time * 5 + p.phase) * 15 + Math.sin(time * 2) * 5 : 0;
+        const currentLen = p.length + pulse;
+
+        // Dynamic color based on intensity
+        const intensity = isPlaying ? (Math.sin(time * 5 + p.phase) + 1) / 2 : 0;
+        ctx.strokeStyle = isPlaying ? `rgba(0, 242, 255, ${0.4 + intensity * 0.6})` : '#222';
+        ctx.lineWidth = isPlaying ? 3 + intensity * 2 : 2;
 
         ctx.beginPath();
-        const startX = 150 + Math.cos(p.angle) * 125;
-        const startY = 150 + Math.sin(p.angle) * 125;
-        const endX = 150 + Math.cos(p.angle) * (125 + currentLen);
-        const endY = 150 + Math.sin(p.angle) * (125 + currentLen);
+        const startX = 150 + Math.cos(p.angle) * 120;
+        const startY = 150 + Math.sin(p.angle) * 120;
+        const endX = 150 + Math.cos(p.angle) * (120 + currentLen);
+        const endY = 150 + Math.sin(p.angle) * (120 + currentLen);
 
         ctx.moveTo(startX, startY);
         ctx.lineTo(endX, endY);
+
+        if (isPlaying) {
+            ctx.shadowBlur = 10 * intensity;
+            ctx.shadowColor = '#00f2ff';
+        } else {
+            ctx.shadowBlur = 0;
+        }
+
         ctx.stroke();
     });
 
@@ -665,7 +729,7 @@ async function fetchAPI(endpoint, method = 'GET') {
 }
 
 function copyRole(btn) {
-    const roleName = "🎧 | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑";
+    const roleName = "⚛ | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑";
     navigator.clipboard.writeText(roleName).then(() => {
         const originalHtml = btn.innerHTML;
         btn.innerHTML = '<i class="fas fa-check"></i> COPIED!';
@@ -677,6 +741,6 @@ function copyRole(btn) {
     }).catch(err => {
         console.error('Failed to copy: ', err);
         btn.innerHTML = '<i class="fas fa-times"></i> ERROR';
-        setTimeout(() => btn.innerHTML = '<i class="fas fa-copy"></i> 🎧 | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑', 2000);
+        setTimeout(() => btn.innerHTML = '<i class="fas fa-copy"></i> ⚛ | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑', 2000);
     });
 }

@@ -5,6 +5,7 @@ import yt_dlp
 import asyncio
 import os
 import json
+import gc
 
 # FFmpeg path
 FFMPEG_PATH = "ffmpeg" # Default to system path (Linux/Render)
@@ -170,7 +171,16 @@ class Music(commands.Cog):
                 "original_url": info.get("webpage_url", query)
             }
 
+            # Memory Safety: Limit queue size to 50
+            if len(state.queue) >= 50:
+                return {"error": "Queue limit exceeded (50 tracks). Clear some tracks before adding more."}
+
             state.queue.append(song_info)
+            
+            # Explicitly clear 'info' and trigger GC to free memory after heavy extraction
+            del info
+            gc.collect()
+
             if not vc.is_playing() and not vc.is_paused():
                 await self.play_next(guild_id)
             
@@ -178,6 +188,7 @@ class Music(commands.Cog):
                 self.bot.dispatch_dashboard_update(guild_id)
             return {"status": "ok", "song": song_info}
         except Exception as e:
+            gc.collect() # Ensure cleanup on error
             return {"error": str(e)}
 
     def get_filters(self, state):
@@ -386,6 +397,8 @@ class Music(commands.Cog):
         state.current_song = None
         if vc:
             vc.stop()
+            if hasattr(self.bot, 'dispatch_dashboard_update'):
+                self.bot.dispatch_dashboard_update(interaction.guild_id)
             await interaction.response.send_message("⏹️ تم الإيقاف ومسح القائمة")
         else:
             await interaction.response.send_message("❌ غير متصل", ephemeral=True)
@@ -410,6 +423,8 @@ class Music(commands.Cog):
         if 0 <= from_index < len(state.queue) and 0 <= to_index <= len(state.queue):
             item = state.queue.pop(from_index)
             state.queue.insert(to_index, item)
+            if hasattr(self.bot, 'dispatch_dashboard_update'):
+                self.bot.dispatch_dashboard_update(guild_id)
             return True
         return False
 
@@ -417,5 +432,7 @@ class Music(commands.Cog):
         state = self.get_state(guild_id)
         if 0 <= index < len(state.queue):
             state.queue.pop(index)
+            if hasattr(self.bot, 'dispatch_dashboard_update'):
+                self.bot.dispatch_dashboard_update(guild_id)
             return True
         return False

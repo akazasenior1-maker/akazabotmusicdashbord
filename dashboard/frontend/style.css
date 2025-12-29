@@ -8,9 +8,10 @@
     --neon-green: #39ff14;
     --text-primary: #ffffff;
     --text-secondary: rgba(255, 255, 255, 0.7);
-    --glass-border: rgba(255, 255, 255, 0.12);
+    --glass-border: rgba(255, 255, 255, 0.1);
     --neon-glow: 0 0 15px rgba(0, 242, 255, 0.4);
-    --transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    --neon-glow-purple: 0 0 15px rgba(188, 19, 254, 0.4);
+    --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 * {
@@ -44,11 +45,12 @@ body {
 }
 
 .glass {
-    background: var(--card-bg);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    border: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(25px) saturate(200%);
+    -webkit-backdrop-filter: blur(25px) saturate(200%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 20px;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
 }
 
 /* --- LOGIN SCREEN --- */
@@ -198,9 +200,36 @@ body {
 }
 
 .btn-neon:hover {
-    transform: scale(1.05) translateY(-5px);
-    box-shadow: 0 0 60px rgba(0, 242, 255, 0.8), 0 0 120px rgba(188, 19, 254, 0.4);
+    transform: scale(1.02) translateY(-3px);
+    box-shadow: 0 0 40px rgba(0, 242, 255, 0.6), 0 0 80px rgba(188, 19, 254, 0.3);
     filter: brightness(1.2);
+}
+
+.btn-neon:disabled,
+.btn-neon.loading {
+    opacity: 0.6;
+    cursor: wait;
+    filter: grayscale(0.5);
+    pointer-events: none;
+}
+
+.btn-neon.loading span::after {
+    content: "...";
+    animation: loadingDots 1.5s infinite;
+}
+
+@keyframes loadingDots {
+    0% {
+        content: ".";
+    }
+
+    33% {
+        content: "..";
+    }
+
+    66% {
+        content: "...";
+    }
 }
 
 /* --- DASHBOARD LAYOUT --- */
@@ -620,12 +649,13 @@ transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 .neon-border {
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     transition: 0.3s;
 }
 
 .neon-border:hover {
-    border-color: var(--neon-blue);
+    border-color: rgba(0, 242, 255, 0.4);
+    box-shadow: 0 0 15px rgba(0, 242, 255, 0.1);
 }
 
 /* --- PAGE TRANSITION --- */

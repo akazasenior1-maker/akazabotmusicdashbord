@@ -13,6 +13,7 @@ import subprocess
 import psutil
 import signal
 import sys
+import gc
 
 app = FastAPI()
 
@@ -30,6 +31,7 @@ bot_instance = None
 bot_process: Optional[subprocess.Popen] = None
 active_websockets: Dict[int, List[WebSocket]] = {} # guild_id -> list of websockets
 cache_data = {} # In-memory cache for Discord API
+last_broadcasted_state = {} # guild_id -> last status dict
 LISTENING_PORT = 8000 # Default to manager port
 
 # Frontend path configuration
@@ -48,22 +50,43 @@ async def startup_event():
 async def bot_watchdog():
     while True:
         try:
-            await start_bot_internal()
+            # Check if bot is alive via process poll
             global bot_process
+            should_start = False
+            
             if bot_process:
-                ret = bot_process.poll()
-                if ret is not None:
-                    print(f"[WARN] Bot process ended with code {ret}. Restarting in 5s...")
+                if bot_process.poll() is not None:
+                    print(f"[WARN] Bot process ended. Cleaning up...")
+                    await cleanup_bot_processes()
                     bot_process = None
-                    await asyncio.sleep(5)
+                    should_start = True
                 else:
-                    # Bot is running, wait a bit before checking again
-                    await asyncio.sleep(10)
+                    # Still running, wait
+                    await asyncio.sleep(15)
             else:
-                await asyncio.sleep(5)
+                should_start = True
+
+            if should_start:
+                print("[INFO] Starting Bot...")
+                await start_bot_internal()
+                await asyncio.sleep(10) # Give it time to boot
+                
         except Exception as e:
             print(f"[ERROR] Watchdog error: {e}")
             await asyncio.sleep(10)
+
+async def cleanup_bot_processes():
+    """Aggressive cleanup of any hanging bot/ffmpeg processes."""
+    for proc in psutil.process_iter(['name', 'cmdline']):
+        try:
+            cmd = " ".join(proc.info.get('cmdline') or [])
+            name = proc.info.get('name', '').lower()
+            if ('bot.py' in cmd and 'python' in name) or ('ffmpeg' in name):
+                print(f"[CLEANUP] Terminating {name} (PID: {proc.pid})")
+                proc.terminate()
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+    gc.collect()
 
 async def start_bot_internal():
     global bot_process
@@ -104,23 +127,40 @@ def get_bot():
     return bot_instance
 
 async def verify_token(token: str):
-    if token in cache_data and asyncio.get_event_loop().time() - cache_data[token]["time"] < 300:
+    now = asyncio.get_event_loop().time()
+    if token in cache_data and now - cache_data[token]["time"] < 300:
         return cache_data[token]["user"]
     
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=10.0) as client:
         headers = {"Authorization": f"Bearer {token}"}
         try:
             r = await client.get("https://discord.com/api/users/@me", headers=headers)
-            if r.status_code != 200:
+            if r.status_code == 200:
+                user = r.json()
+                
+                # Capping cache size to prevent OOM
+                if len(cache_data) > 50:
+                    cache_data.clear() # Simple flush if too large
+                
+                cache_data[token] = {"user": user, "time": now}
+                return user
+            elif r.status_code == 401:
+                # Token expired or revoked
+                if token in cache_data: del cache_data[token]
+                raise HTTPException(status_code=401, detail="Session expired. Please re-authenticate.")
+            else:
                 print(f"[DEBUG] verify_token failed for token ...{token[-5:]}: {r.status_code} - {r.text}")
-                raise HTTPException(status_code=401, detail="Invalid token")
-            user = r.json()
-            cache_data[token] = {"user": user, "time": asyncio.get_event_loop().time()}
-            return user
+                # If we have a cached version and it's not TOO old, allow grace period on API failure
+                if token in cache_data and now - cache_data[token]["time"] < 1800:
+                    return cache_data[token]["user"]
+                raise HTTPException(status_code=r.status_code, detail="Discord API unreachable")
         except Exception as e:
             if isinstance(e, HTTPException): raise e
             print(f"[ERROR] Exception in verify_token: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            # Grace period for network issues
+            if token in cache_data and now - cache_data[token]["time"] < 1800:
+                return cache_data[token]["user"]
+            raise HTTPException(status_code=500, detail="Identity verification failed")
 
 @app.websocket("/ws/{guild_id}")
 async def websocket_endpoint(websocket: WebSocket, guild_id: int):
@@ -295,13 +335,13 @@ async def get_servers(token: str):
                 has_dj_role = False
                 if member:
                     # Relaxed check: Accept exact match OR any role with "DJ" or "Music" in name (case-insensitive)
-                    has_dj_role = any("DJ" in r.name.upper() or "MUSIC" in r.name.upper() or r.name == "🎧 | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑" for r in member.roles)
+                    has_dj_role = any("DJ" in r.name.upper() or "MUSIC" in r.name.upper() or r.name == "⚛ | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑" for r in member.roles)
                     print(f"[DEBUG] User {user['username']} in {discord_guild.name}: Roles={[r.name for r in member.roles]}, HasDJ={has_dj_role}")
                 else:
                     print(f"[DEBUG] Member {user_id} found in neither cache nor API for guild {guild_id}")
                 
                 # Check if role exists in guild (regardless of whether user has it)
-                role_exists = any(r.name == "🎧 | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑" for r in discord_guild.roles)
+                role_exists = any(r.name == "⚛ | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑" for r in discord_guild.roles)
                 
                 # Include guild in list but mark access
                 guild["bot_in"] = True
@@ -454,10 +494,10 @@ async def control_bot(guild_id: int, action: str, params: ControlParams):
         member = guild.get_member(user_id)
         is_admin = member.guild_permissions.administrator or member.guild_permissions.manage_guild if member else False
         # Relaxed check for control endpoint as well
-        has_dj_role = any("DJ" in r.name.upper() or "MUSIC" in r.name.upper() or r.name == "🎧 | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑" for r in member.roles) if member else False
+        has_dj_role = any("DJ" in r.name.upper() or "MUSIC" in r.name.upper() or r.name == "⚛ | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑" for r in member.roles) if member else False
         
         if not (has_dj_role or is_admin):
-            raise HTTPException(status_code=403, detail="You do not have the 🎧 | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑 role required to use this dashboard.")
+            raise HTTPException(status_code=403, detail="You do not have the ⚛ | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑 role required to use this dashboard.")
         
         if action == "play":
             if not params.query:
@@ -520,10 +560,10 @@ async def control_bot(guild_id: int, action: str, params: ControlParams):
         elif action == "create_role":
             if not is_admin:
                 raise HTTPException(status_code=403, detail="Only admins can create roles.")
-            if any(r.name == "🎧 | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑" for r in guild.roles):
+            if any(r.name == "⚛ | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑" for r in guild.roles):
                 return {"status": "exists", "message": "Role already exists"}
             try:
-                await guild.create_role(name="🎧 | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑", color=discord.Color.from_rgb(0, 242, 255), reason="Dashboard One-Click Setup")
+                await guild.create_role(name="⚛ | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑", color=discord.Color.from_rgb(0, 242, 255), reason="Dashboard One-Click Setup")
                 return {"status": "created"}
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Failed to create role: {e}")
@@ -654,6 +694,40 @@ async def internal_broadcast(guild_id: int, status: Dict):
     if LISTENING_PORT != 8000:
         return {"error": "Only manager can broadcast"}
         
+    # Optimization: Only broadcast if state changed meaningfully
+    global last_broadcasted_state
+    prev = last_broadcasted_state.get(guild_id)
+    
+    # Filter out elapsed time changes if they are small (e.g. < 2 seconds) 
+    # and nothing else changed, to reduce noise.
+    # But for "100% real-time", we might want to keep it.
+    # Let's check for "Structural" changes.
+    structural_keys = ["current_song", "is_paused", "volume", "queue", "bass_boost", "auto_play", "history", "eq_gains"]
+    changed = False
+    if not prev:
+        changed = True
+    else:
+        for k in structural_keys:
+            if status.get(k) != prev.get(k):
+                changed = True
+                break
+        
+        # Also check elapsed if it jumped significantly (e.g. seek or major lag)
+        if not changed:
+            prev_elapsed = prev.get("elapsed", 0)
+            curr_elapsed = status.get("elapsed", 0)
+            if abs(curr_elapsed - prev_elapsed) > 2:
+                changed = True
+
+    if not changed:
+        return {"status": "skipped"}
+
+    # Limit state cache
+    if len(last_broadcasted_state) > 100:
+        last_broadcasted_state.clear()
+        
+    last_broadcasted_state[guild_id] = status
+
     if guild_id in active_websockets:
         disconnected = []
         for ws in active_websockets[guild_id]:

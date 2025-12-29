@@ -5,6 +5,7 @@ import config
 import api_bridge
 import asyncio
 import httpx
+import gc
 
 intents = discord.Intents.default()
 intents.voice_states = True
@@ -12,6 +13,9 @@ intents.message_content = True
 intents.guilds = True
 intents.members = True # Required to check roles/permissions
 
+
+# Singleton IPC client to save memory
+ipc_client = httpx.AsyncClient()
 
 class MusicBot(commands.Bot):
     def __init__(self):
@@ -72,8 +76,12 @@ class MusicBot(commands.Bot):
                     "eq_gains": state.eq_gains
                 }
                 
-                async with httpx.AsyncClient() as client:
-                    await client.post(f"http://localhost:8000/api/internal/broadcast/{guild_id}", json=status)
+                global ipc_client
+                await ipc_client.post(f"http://localhost:8000/api/internal/broadcast/{guild_id}", json=status)
+                
+                # Cleanup reference
+                del status
+                gc.collect()
             except Exception as e:
                 print(f"[ERROR] IPC Broadcast failed: {e}")
 
