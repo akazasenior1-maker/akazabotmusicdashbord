@@ -903,7 +903,202 @@ body {
     opacity: 0.3;
 }
 
-padding: 2px 6px;
-border-radius: 4px;
-color: var(--neon-main);
+/* --- WELCOME SCREEN (SPLASH) --- */
+#welcome-screen {
+    background: #000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: 100vw;
+}
+
+#welcome-screen:not(.active) {
+    display: none;
+}
+
+.welcome-container {
+    text-align: center;
+    z-index: 10;
+    padding: 4rem;
+    border-radius: 40px;
+    background: rgba(255, 255, 255, 0.02);
+    backdrop-filter: blur(25px);
+    -webkit-backdrop-filter: blur(25px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 0 100px rgba(0, 0, 0, 1), 0 0 40px rgba(0, 242, 255, 0.1);
+    animation: welcomeContainerScale 1.2s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+@keyframes welcomeContainerScale {
+    from {
+        transform: scale(0.7);
+        opacity: 0;
+    }
+
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.welcome-logo-box {
+    position: relative;
+    width: 160px;
+    height: 160px;
+    margin: 0 auto 2.5rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: 3px solid var(--neon-blue);
+    border-radius: 40px;
+    overflow: hidden;
+    box-shadow: 0 0 50px rgba(0, 242, 255, 0.3);
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.main-welcome-icon {
+    font-size: 6rem;
+    color: var(--neon-blue);
+    text-shadow: 0 0 30px var(--neon-blue);
+    animation: iconPulse 2s infinite ease-in-out;
+}
+
+@keyframes iconPulse {
+    0% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.1);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+.scanner-line {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 6px;
+    background: var(--neon-blue);
+    box-shadow: 0 0 20px var(--neon-blue);
+    animation: scannerMove 4s infinite ease-in-out;
+    z-index: 5;
+    opacity: 0.6;
+}
+
+@keyframes scannerMove {
+    0% {
+        top: 0;
+    }
+
+    50% {
+        top: 100%;
+    }
+
+    100% {
+        top: 0;
+    }
+}
+
+.welcome-title {
+    font-family: 'Syncopate', sans-serif;
+    font-size: 3.5rem;
+    font-weight: 800;
+    letter-spacing: 15px;
+    margin-bottom: 1rem;
+    color: white;
+    text-shadow: 0 0 40px var(--neon-blue);
+}
+
+.welcome-title span {
+    color: var(--neon-purple);
+    text-shadow: 0 0 40px var(--neon-purple);
+}
+
+.welcome-subtitle {
+    font-size: 1rem;
+    letter-spacing: 5px;
+    color: var(--text-secondary);
+    margin-bottom: 3.5rem;
+    text-transform: uppercase;
+}
+
+.btn-neon-large {
+    position: relative;
+    padding: 1.5rem 4rem;
+    background: transparent;
+    border: 2px solid var(--neon-blue);
+    color: var(--neon-blue);
+    font-size: 1.2rem;
+    font-weight: 900;
+    letter-spacing: 5px;
+    border-radius: 100px;
+    cursor: pointer;
+    overflow: hidden;
+    transition: all 0.5s;
+    box-shadow: 0 0 20px rgba(0, 242, 255, 0.2);
+}
+
+.btn-neon-large:hover {
+    background: var(--neon-blue);
+    color: black;
+    box-shadow: 0 0 60px var(--neon-blue);
+    transform: scale(1.05);
+}
+
+.system-check {
+    margin-top: 3rem;
+    display: flex;
+    gap: 30px;
+    justify-content: center;
+    font-size: 0.85rem;
+    color: var(--neon-green);
+    font-weight: 800;
+}
+
+.check-item {
+    opacity: 0;
+    animation: checkAppear 0.8s forwards;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.check-item:nth-child(1) {
+    animation-delay: 1.5s;
+}
+
+.check-item:nth-child(2) {
+    animation-delay: 1.8s;
+}
+
+@keyframes checkAppear {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.welcome-particles {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle at 50% 50%, #0a0a20 0%, #000 100%);
+    z-index: 1;
 }
