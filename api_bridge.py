@@ -250,10 +250,20 @@ async def get_servers(token: str):
             discord_guild = bot.get_guild(guild_id)
             if discord_guild:
                 member = discord_guild.get_member(user_id)
+                if not member:
+                    try:
+                        print(f"[DEBUG] Member {user_id} not in cache for guild {guild_id}, fetching...")
+                        member = await discord_guild.fetch_member(user_id)
+                    except Exception as e:
+                        print(f"[ERROR] Failed to fetch member: {e}")
+                
                 has_dj_role = False
                 if member:
                     # Relaxed check: Accept exact match OR any role with "DJ" or "Music" in name (case-insensitive)
                     has_dj_role = any("DJ" in r.name.upper() or "MUSIC" in r.name.upper() or r.name == "🎧 | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑" for r in member.roles)
+                    print(f"[DEBUG] User {user['username']} in {discord_guild.name}: Roles={[r.name for r in member.roles]}, HasDJ={has_dj_role}")
+                else:
+                    print(f"[DEBUG] Member {user_id} found in neither cache nor API for guild {guild_id}")
                 
                 # Full dashboard access restricted to users with the role
                 if has_dj_role or is_admin:
