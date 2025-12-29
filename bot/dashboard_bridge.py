@@ -84,20 +84,25 @@ class DashboardBridge:
                 print(f"[AUTH] ❌ Invalid or missing token")
                 raise HTTPException(401, "Session expired or invalid")
             
+            # Check if bot is ready
+            if not self.bot.is_ready():
+                print(f"[BOT] ⚠️ Bot not ready yet")
+                raise HTTPException(503, "Bot is starting up. Please wait a moment and try again.")
+            
             print(f"[SERVERS] 🔍 Fetching guilds from Discord...")
             
             # Retry mechanism with exponential backoff
-            max_retries = 3
+            max_retries = 2  # Reduced from 3 for faster feedback
             base_delay = 1
             
             for attempt in range(max_retries):
                 try:
                     headers = {'Authorization': f'Bearer {token}'}
                     
-                    # Add timeout to prevent hanging
+                    # Reduced timeout for faster feedback
                     r = await asyncio.wait_for(
                         self.http_client.get("https://discord.com/api/users/@me/guilds", headers=headers),
-                        timeout=10.0
+                        timeout=5.0  # Reduced from 10s to 5s
                     )
                     
                     print(f"[DISCORD API] Response status: {r.status_code}")

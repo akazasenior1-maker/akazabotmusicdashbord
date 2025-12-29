@@ -171,7 +171,31 @@ async function renderServers(servers) {
             container.appendChild(card);
         });
     } catch (err) {
-        container.innerHTML = `<p class="neon-text-red">UPLINK ERROR: ${err.message}</p>`;
+        console.error("Server fetch error:", err);
+
+        // Display user-friendly error messages based on status code
+        let errorMessage = 'UPLINK ERROR: Unknown error';
+
+        if (err.message.includes('401') || err.message.includes('Session expired')) {
+            errorMessage = '🔐 SESSION EXPIRED<br><small>Please login again using the AUTHENTICATE button below.</small>';
+            // Auto-logout to force re-authentication
+            setTimeout(() => logout(), 2000);
+        } else if (err.message.includes('503') || err.message.includes('Bot is starting')) {
+            errorMessage = '⏳ BOT STARTING UP<br><small>The bot is initializing. Please wait 10 seconds and refresh the page.</small>';
+        } else if (err.message.includes('429') || err.message.includes('rate limit')) {
+            errorMessage = '⏱️ TOO MANY REQUESTS<br><small>Discord API rate limit. Please wait 30 seconds and try again.</small>';
+        } else if (err.message.includes('timeout') || err.message.includes('504')) {
+            errorMessage = '⏱️ CONNECTION TIMEOUT<br><small>Discord is slow to respond. Please check your internet and try again.</small>';
+        } else {
+            errorMessage = `❌ ${err.message}<br><small>If this persists, try logging out and back in.</small>`;
+        }
+
+        container.innerHTML = `
+            <div class="no-access glass neon-border" style="text-align: center;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 3rem; margin-bottom: 1rem; color: var(--neon-red);"></i>
+                <p style="font-size: 1.2rem; margin-bottom: 0.5rem;">${errorMessage}</p>
+            </div>
+        `;
     }
 }
 
