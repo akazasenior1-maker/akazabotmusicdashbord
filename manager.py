@@ -1,22 +1,17 @@
+from bot.bot import bot
 import asyncio
-import api_bridge
-import os
 
 async def main():
-    print("="*40)
-    print(" AKAZA MUSIC MANAGEMENT SYSTEM ")
-    print("="*40)
-    print(f"Working Directory: {os.getcwd()}")
-    
-    # Start the API bridge server
-    # This server will stay alive to manage the bot process
-    port = int(os.environ.get("PORT", 8000))
+    # Entry point for Render
     try:
-        await api_bridge.run_server(port=port)
-    except KeyboardInterrupt:
-        print("\n[INFO] Manager shutting down...")
+        await bot.start("") # Token will be read from os.environ in bot.py logic if updated, or pass it here. 
+        # Actually bot.py class doesn't read token automatically in constructor. 
     except Exception as e:
-        print(f"[ERROR] Manager failed: {e}")
+        print(f"FAILED TO START: {e}")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    from bot.config import TOKEN
+    if TOKEN == "YOUR_BOT_TOKEN_HERE":
+        print("FATAL ERROR: BOT_TOKEN not set in Environment Variables!")
+    else:
+        asyncio.run(bot.start(TOKEN))
