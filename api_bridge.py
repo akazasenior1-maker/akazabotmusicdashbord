@@ -252,7 +252,8 @@ async def get_servers(token: str):
                 member = discord_guild.get_member(user_id)
                 has_dj_role = False
                 if member:
-                    has_dj_role = any(r.name == "🎧 | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑" for r in member.roles)
+                    # Relaxed check: Accept exact match OR any role with "DJ" or "Music" in name (case-insensitive)
+                    has_dj_role = any("DJ" in r.name.upper() or "MUSIC" in r.name.upper() or r.name == "🎧 | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑" for r in member.roles)
                 
                 # Full dashboard access restricted to users with the role
                 if has_dj_role or is_admin:
@@ -402,7 +403,8 @@ async def control_bot(guild_id: int, action: str, params: ControlParams):
         user_id = int(user["id"])
         member = guild.get_member(user_id)
         is_admin = member.guild_permissions.administrator or member.guild_permissions.manage_guild if member else False
-        has_dj_role = any(r.name == "🎧 | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑" for r in member.roles) if member else False
+        # Relaxed check for control endpoint as well
+        has_dj_role = any("DJ" in r.name.upper() or "MUSIC" in r.name.upper() or r.name == "🎧 | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑" for r in member.roles) if member else False
         
         if not (has_dj_role or is_admin):
             raise HTTPException(status_code=403, detail="You do not have the 🎧 | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑 role required to use this dashboard.")
