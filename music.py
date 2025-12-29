@@ -30,7 +30,8 @@ ydl_opts = {
 }
 ffmpeg_opts = {
     "executable": FFMPEG_PATH,
-    "options": "-vn -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 5"
+    "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
+    "options": "-vn"
 }
 
 class GuildState:
