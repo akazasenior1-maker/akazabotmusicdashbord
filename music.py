@@ -26,9 +26,20 @@ ydl_opts = {
     "no_color": True,
     "no_playlist": True,
     "default_search": "ytsearch",
-    "socket_timeout": 5,
+    "socket_timeout": 10,
     "cachedir": False,
+    "http_headers": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-us,en;q=0.5",
+        "Sec-Fetch-Mode": "navigate",
+    }
 }
+
+# Check for cookies.txt to bypass "bot detection" on Render
+if os.path.exists("cookies.txt"):
+    ydl_opts["cookiefile"] = "cookies.txt"
+    print("[INFO] YouTube cookies loaded from cookies.txt")
 ffmpeg_opts = {
     "executable": FFMPEG_PATH,
     "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",

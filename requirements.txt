@@ -1,5 +1,5 @@
 discord.py
-yt-dlp
+yt-dlp>=2024.12.23
 PyNaCl
 fastapi
 uvicorn[standard]
