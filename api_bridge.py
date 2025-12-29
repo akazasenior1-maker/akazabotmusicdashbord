@@ -541,9 +541,25 @@ async def get_bot_status():
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
 
+    # If we are the manager (no bot_instance), we need to ask the bot if IT is ready
+    bot_ready = bot_instance is not None
+    if not bot_ready and is_running:
+        try:
+            # Ping the bot's internal API to see if it's fully loaded
+            async with httpx.AsyncClient() as client:
+                r = await client.get("http://127.0.0.1:8001/api/bot/status", timeout=2.0)
+                if r.status_code == 200:
+                    data = r.json()
+                    # If the bot answers, it means the API is up. 
+                    # The bot's OWN /api/bot/status will say bot_ready=True because it has bot_instance set.
+                    bot_ready = data.get("bot_ready", False)
+        except Exception:
+            # Bot might be starting up and API not ready yet
+            bot_ready = False
+
     return {
         "is_running": is_running,
-        "bot_ready": bot_instance is not None
+        "bot_ready": bot_ready
     }
 
 @app.post("/api/bot/start")
