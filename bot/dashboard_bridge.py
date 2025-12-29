@@ -1,4 +1,13 @@
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
+import httpx
+import asyncio
+import json
+import time
+from typing import Dict, List
+from .config import CLIENT_ID, CLIENT_SECRET, REDIRECT_URI
 
 class DashboardBridge:
     def __init__(self, bot):
