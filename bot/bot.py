@@ -84,6 +84,41 @@ class AkazaBot(commands.Bot):
         print(f"[ONLINE] Akaza Music Bot: {self.user.name}")
         await self.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name="Premium Neon Music"))
 
+    async def dashboard_play(self, guild_id: int, query: str):
+        """Play logic triggered from the Web Dashboard."""
+        state = self.get_guild_state(guild_id)
+        guild = self.get_guild(guild_id)
+        if not guild: return
+
+        # Try to find a voice channel to join
+        target_channel = None
+        if state.voice_client:
+            target_channel = state.voice_client.channel
+        else:
+            # Join the first voice channel with members, or just the first one
+            for vc in guild.voice_channels:
+                if len(vc.members) > 0:
+                    target_channel = vc
+                    break
+            if not target_channel and guild.voice_channels:
+                target_channel = guild.voice_channels[0]
+
+        if not target_channel: return
+
+        state.voice_client = await self.voice_mgr.connect_to(target_channel)
+        if not state.voice_client: return
+
+        song = await self.player.extract_info(query)
+        if not song: return
+        
+        song['requester'] = "Dashboard"
+        
+        if state.voice_client.is_playing() or state.voice_client.is_paused():
+            self.queue_mgr.add_to_queue(guild_id, song)
+            state.queue_list = self.queue_mgr.get_queue(guild_id)
+        else:
+            await play_song(guild_id, song)
+
 # Initialize instance
 bot = AkazaBot()
 
@@ -129,7 +164,6 @@ async def play_next(guild_id):
         await play_song(guild_id, next_song)
     else:
         state.current_song = None
-        # Disconnect after 5 mins of idle? Optional.
 
 async def play_song(guild_id, song):
     state = bot.get_guild_state(guild_id)
@@ -187,40 +221,6 @@ async def resume(interaction: discord.Interaction):
         state.is_paused = False
         state.total_paused_duration += time.time() - state.pause_start_time
         await interaction.response.send_message("▶️ Execution Resumed.")
-    async def dashboard_play(self, guild_id: int, query: str):
-        """Play logic triggered from the Web Dashboard."""
-        state = self.get_guild_state(guild_id)
-        guild = self.get_guild(guild_id)
-        if not guild: return
-
-        # Try to find a voice channel to join
-        target_channel = None
-        if state.voice_client:
-            target_channel = state.voice_client.channel
-        else:
-            # Join the first voice channel with members, or just the first one
-            for vc in guild.voice_channels:
-                if len(vc.members) > 0:
-                    target_channel = vc
-                    break
-            if not target_channel and guild.voice_channels:
-                target_channel = guild.voice_channels[0]
-
-        if not target_channel: return
-
-        state.voice_client = await self.voice_mgr.connect_to(target_channel)
-        if not state.voice_client: return
-
-        song = await self.player.extract_info(query)
-        if not song: return
-        
-        song['requester'] = "Dashboard"
-        
-        if state.voice_client.is_playing() or state.voice_client.is_paused():
-            self.queue_mgr.add_to_queue(guild_id, song)
-            state.queue_list = self.queue_mgr.get_queue(guild_id)
-        else:
-            await play_song(guild_id, song)
 
 @bot.tree.command(name="volume", description="Adjust the audio level")
 @app_commands.describe(level="Volume level 1-200")
