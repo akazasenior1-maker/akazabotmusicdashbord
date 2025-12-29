@@ -559,5 +559,10 @@ async function fetchAPI(endpoint, method = 'GET') {
     const separator = endpoint.includes('?') ? '&' : '?';
     const res = await fetch(`${API_URL}${endpoint}${separator}token=${currentToken}`, { method });
     if (res.status === 401) logout();
-    return res.json();
+
+    const data = await res.json();
+    if (!res.ok) {
+        throw new Error(data.detail || data.error || "Request failed");
+    }
+    return data;
 }
