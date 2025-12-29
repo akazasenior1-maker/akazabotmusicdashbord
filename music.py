@@ -135,10 +135,21 @@ class Music(commands.Cog):
                 return {"error": "Bot is not in a voice channel and no active channels found."}
 
         try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(f"ytsearch:{query}" if not query.startswith("http") else query, download=False)
-                if not info:
-                    return {"error": "Could not extract song info."}
+            loop = asyncio.get_event_loop()
+            
+            # ydl_opts passed to constructor, but we need to create ydl instance inside executor? 
+            # No, ydl instance is not thread-safe if reused, but here we create one.
+            # It's safer to wrap the entire extraction function.
+            
+            def extract(q):
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    return ydl.extract_info(f"ytsearch:{q}" if not q.startswith("http") else q, download=False)
+            
+            # Run blocking extraction in executor
+            info = await loop.run_in_executor(None, extract, query)
+
+            if not info:
+                return {"error": "Could not extract song info."}
                 
                 if 'entries' in info:
                     info = info['entries'][0]
