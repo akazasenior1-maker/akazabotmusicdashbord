@@ -217,7 +217,7 @@ function updateUI(status) {
     if (status.current_song) {
         document.getElementById('song-title').textContent = status.current_song.title;
         document.getElementById('song-requester').querySelector('span').textContent = status.current_song.requester;
-        document.getElementById('song-thumbnail').src = status.current_song.thumbnail || 'static/assets/default_thumb.png';
+        document.getElementById('song-thumbnail').src = status.current_song.thumbnail || 'https://via.placeholder.com/300/1a1a1a/00f2ff?text=AKAZA+MUSIC';
 
         currentSongDuration = status.current_song.duration;
         document.querySelector('.time-total').textContent = formatTime(currentSongDuration);
@@ -234,7 +234,7 @@ function updateUI(status) {
         stopProgressTimer();
         document.getElementById('song-title').textContent = "STANDBY MODE";
         document.getElementById('song-requester').querySelector('span').textContent = "None";
-        document.getElementById('song-thumbnail').src = 'static/assets/default_thumb.png';
+        document.getElementById('song-thumbnail').src = 'https://via.placeholder.com/300/1a1a1a/00f2ff?text=AKAZA+MUSIC';
         document.querySelector('.time-total').textContent = "0:00";
         document.getElementById('progress-fill').style.width = '0%';
         document.querySelector('.time-current').textContent = "0:00";
@@ -287,7 +287,7 @@ function renderHistory(history) {
     history.forEach(item => {
         const div = document.createElement('div');
         div.className = 'history-item glass neon-border';
-        const thumb = item.thumbnail || 'static/assets/default_thumb.png';
+        const thumb = item.thumbnail || 'https://via.placeholder.com/300/1a1a1a/00f2ff?text=AKAZA+MUSIC';
         div.innerHTML = `
             <img src="${thumb}" class="history-thumb" alt="">
             <div class="history-info">

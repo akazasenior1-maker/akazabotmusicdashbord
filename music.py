@@ -157,18 +157,18 @@ class Music(commands.Cog):
 
             if not info:
                 return {"error": "Could not extract song info."}
-                
-                if 'entries' in info:
-                    info = info['entries'][0]
-                
-                song_info = {
-                    "url": info["url"],
-                    "title": info.get("title", "Unknown"),
-                    "duration": info.get("duration", 0),
-                    "thumbnail": info.get("thumbnail"),
-                    "requester": requester,
-                    "original_url": info.get("webpage_url", query)
-                }
+
+            if 'entries' in info:
+                info = info['entries'][0]
+            
+            song_info = {
+                "url": info["url"],
+                "title": info.get("title", "Unknown"),
+                "duration": info.get("duration", 0),
+                "thumbnail": info.get("thumbnail"),
+                "requester": requester,
+                "original_url": info.get("webpage_url", query)
+            }
 
             state.queue.append(song_info)
             if not vc.is_playing() and not vc.is_paused():
