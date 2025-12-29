@@ -35,6 +35,36 @@ LISTENING_PORT = 8000 # Default to manager port
 # Frontend path configuration
 frontend_path = os.path.join(os.path.dirname(__file__), "dashboard", "frontend")
 
+@app.on_event("startup")
+async def startup_event():
+    print("[INFO] Server starting up...")
+    # Auto-start bot if token is available (Production/Render mode)
+    token = config.TOKEN
+    if token and token != "YOUR_BOT_TOKEN_HERE" and not bot_instance:
+        print("[INFO] Auto-starting bot process...")
+        await start_bot_internal()
+
+async def start_bot_internal():
+    global bot_process
+    if bot_process: return
+
+    python_exe = os.path.join(os.path.dirname(__file__), "venv", "Scripts", "python.exe")
+    if not os.path.exists(python_exe):
+        python_exe = sys.executable 
+
+    try:
+        # On Render (Linux), we don't need CREATE_NEW_PROCESS_GROUP usually, 
+        # but let's keep it compatible.
+        creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
+        bot_process = subprocess.Popen(
+            [python_exe, "bot.py"],
+            cwd=os.path.dirname(__file__),
+            creationflags=creationflags
+        )
+        print("[INFO] Bot process launched successfully.")
+    except Exception as e:
+        print(f"[ERROR] Failed to auto-start bot: {e}")
+
 @app.get("/")
 async def read_index():
     return FileResponse(os.path.join(frontend_path, "index.html"))
