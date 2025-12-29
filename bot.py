@@ -10,6 +10,8 @@ intents = discord.Intents.default()
 intents.voice_states = True
 intents.message_content = True
 intents.guilds = True
+intents.members = True # Required to check roles/permissions
+
 
 class MusicBot(commands.Bot):
     def __init__(self):
