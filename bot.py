@@ -68,6 +68,7 @@ class MusicBot(commands.Bot):
                     "start_time": state.start_time,
                     "elapsed": int(current_elapsed),
                     "stats": state.stats,
+                    "history": state.history,
                     "eq_gains": state.eq_gains
                 }
                 
