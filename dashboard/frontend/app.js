@@ -108,7 +108,17 @@ async function renderServers(servers) {
             let actionHtml = '';
             if (server.bot_in) {
                 if (server.has_access) {
-                    actionHtml = `<button class="btn-neon-main" id="btn-manage-${server.id}">OPEN COMMAND PANEL</button>`;
+                    if (server.role_missing) {
+                        actionHtml = `
+                            <button class="btn-neon-main" id="btn-manage-${server.id}">OPEN COMMAND PANEL</button>
+                            <div class="setup-warning">
+                                <i class="fas fa-exclamation-triangle neon-text-yellow"></i> ROLE MISSING
+                                <button class="btn-neon-outline btn-small" onclick="createRole(this, '${server.id}')">CREATE NOW</button>
+                            </div>
+                        `;
+                    } else {
+                        actionHtml = `<button class="btn-neon-main" id="btn-manage-${server.id}">OPEN COMMAND PANEL</button>`;
+                    }
                 } else {
                     actionHtml = `
                         <div class="locked-msg neon-text-red">
@@ -207,7 +217,7 @@ function updateUI(status) {
     if (status.current_song) {
         document.getElementById('song-title').textContent = status.current_song.title;
         document.getElementById('song-requester').querySelector('span').textContent = status.current_song.requester;
-        document.getElementById('song-thumbnail').src = status.current_song.thumbnail || 'https://via.placeholder.com/400';
+        document.getElementById('song-thumbnail').src = status.current_song.thumbnail || 'static/assets/default_thumb.png';
 
         currentSongDuration = status.current_song.duration;
         document.querySelector('.time-total').textContent = formatTime(currentSongDuration);
@@ -224,7 +234,7 @@ function updateUI(status) {
         stopProgressTimer();
         document.getElementById('song-title').textContent = "STANDBY MODE";
         document.getElementById('song-requester').querySelector('span').textContent = "None";
-        document.getElementById('song-thumbnail').src = 'https://via.placeholder.com/400';
+        document.getElementById('song-thumbnail').src = 'static/assets/default_thumb.png';
         document.querySelector('.time-total').textContent = "0:00";
         document.getElementById('progress-fill').style.width = '0%';
         document.querySelector('.time-current').textContent = "0:00";
@@ -261,6 +271,32 @@ function updateUI(status) {
 
     // Queue
     renderQueue(status.queue);
+
+    // History
+    if (status.history) renderHistory(status.history);
+}
+
+function renderHistory(history) {
+    const hList = document.getElementById('history-list');
+    if (!hList) return;
+    if (!history || history.length === 0) {
+        hList.innerHTML = '<div class="empty-msg glass neon-border"><i class="fas fa-ghost"></i><p>No past signals detected yet.</p></div>';
+        return;
+    }
+    hList.innerHTML = '';
+    history.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'history-item glass neon-border';
+        const thumb = item.thumbnail || 'static/assets/default_thumb.png';
+        div.innerHTML = `
+            <img src="${thumb}" class="history-thumb" alt="">
+            <div class="history-info">
+                <h4 class="truncate">${item.title}</h4>
+                <p><i class="fas fa-user-astronaut"></i> ${item.requester}</p>
+            </div>
+        `;
+        hList.appendChild(div);
+    });
 }
 
 function renderQueue(queue) {
@@ -424,6 +460,7 @@ safeOnclick('btn-skip', () => sendControl('skip'));
 safeOnclick('btn-stop', () => sendControl('stop'));
 safeOnclick('btn-leave', () => sendControl('leave'));
 safeOnclick('clear-queue', () => sendControl('stop'));
+safeOnclick('btn-lyrics', () => alert("🛰️ LYRICS PROTOCOL: Signal decoding in progress. Feature coming in next update."));
 
 const volumeRange = document.getElementById('volume-range');
 if (volumeRange) {

@@ -47,6 +47,8 @@
                             Control</span></a>
                     <a href="#" onclick="showPage('settings')"><i class="fas fa-sliders-h"></i> <span>Audio
                             Engine</span></a>
+                    <a href="#" onclick="showPage('history')"><i class="fas fa-history"></i> <span>Signal
+                            History</span></a>
                 </div>
 
                 <div class="music-stats-panel glass neon-border">
@@ -115,7 +117,7 @@
                             <div class="player-main">
                                 <div class="visualizer-container">
                                     <canvas id="waveform-canvas"></canvas>
-                                    <img id="song-thumbnail" src="https://via.placeholder.com/400" alt="">
+                                    <img id="song-thumbnail" src="static/assets/default_thumb.png" alt="">
                                 </div>
                                 <div class="song-meta">
                                     <div class="now-playing-badge neon-bg-purple">LIVE STREAM</div>
@@ -131,6 +133,8 @@
                                                 class="fas fa-pause"></i></button>
                                         <button id="btn-skip" class="btn-neon-blue" title="Next Track"><i
                                                 class="fas fa-step-forward"></i></button>
+                                        <button id="btn-lyrics" class="btn-neon-secondary" title="Show Lyrics"><i
+                                                class="fas fa-align-left"></i></button>
                                     </div>
                                 </div>
                             </div>
@@ -275,6 +279,19 @@
                                 <input type="range" min="0" max="100" value="80" class="neon-range">
                             </div>
                             <button class="btn-neon-main btn-full-width btn-save">APPLY CONFIGURATION</button>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="history-page" class="page">
+                    <div class="section-header">
+                        <h2 class="neon-text-purple">SIGNAL ECHOES</h2>
+                        <p>Recently intercepted music transmissions</p>
+                    </div>
+                    <div id="history-list" class="history-grid-neon">
+                        <div class="empty-msg glass neon-border">
+                            <i class="fas fa-ghost"></i>
+                            <p>No past signals detected yet.</p>
                         </div>
                     </div>
                 </section>

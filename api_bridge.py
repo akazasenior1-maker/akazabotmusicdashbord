@@ -178,6 +178,7 @@ async def broadcast_update(guild_id: int):
             "start_time": state.start_time,
             "elapsed": int(current_elapsed),
             "stats": state.stats,
+            "history": state.history,
             "eq_gains": state.eq_gains
         }
         
@@ -299,9 +300,13 @@ async def get_servers(token: str):
                 else:
                     print(f"[DEBUG] Member {user_id} found in neither cache nor API for guild {guild_id}")
                 
+                # Check if role exists in guild (regardless of whether user has it)
+                role_exists = any(r.name == "🎧 | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑" for r in discord_guild.roles)
+                
                 # Include guild in list but mark access
                 guild["bot_in"] = True
                 guild["has_access"] = has_dj_role or is_admin
+                guild["role_missing"] = not role_exists
                 managed_guilds.append(guild)
                 
             elif is_admin:
@@ -371,6 +376,7 @@ async def get_server_status(guild_id: int, token: str):
             "start_time": state.start_time,
             "elapsed": int(current_elapsed),
             "stats": state.stats,
+            "history": state.history,
             "eq_gains": state.eq_gains
         }
     except Exception as e:
@@ -508,10 +514,19 @@ async def control_bot(guild_id: int, action: str, params: ControlParams):
             if f is not None and t is not None:
                 music_cog.move_queue_item(guild_id, f, t)
         elif action == "equalizer":
-            if params.band and params.gain is not None:
                 state.eq_gains[params.band] = params.gain
                 state.save_settings()
                 await music_cog.refresh_playback(guild_id)
+        elif action == "create_role":
+            if not is_admin:
+                raise HTTPException(status_code=403, detail="Only admins can create roles.")
+            if any(r.name == "🎧 | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑" for r in guild.roles):
+                return {"status": "exists", "message": "Role already exists"}
+            try:
+                await guild.create_role(name="🎧 | 𝐃𝐉𝐌𝐀𝐒𝐓𝐄𝐑", color=discord.Color.from_rgb(0, 242, 255), reason="Dashboard One-Click Setup")
+                return {"status": "created"}
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Failed to create role: {e}")
         
         await broadcast_update(guild_id)
         return {"status": "ok"}

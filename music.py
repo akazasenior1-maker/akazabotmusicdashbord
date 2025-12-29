@@ -50,6 +50,7 @@ class GuildState:
         self.elapsed_before_pause = 0
         self.stats = {"total_played": 0, "tracks": {}}
         self.eq_gains = {"low": 0, "mid": 0, "high": 0}
+        self.history = [] # Last played songs
         self.load_settings()
         self.load_stats()
 # ... (intermediate code unchanged) ...
@@ -103,7 +104,9 @@ class GuildState:
             if os.path.exists("music_stats.json"):
                 with open("music_stats.json", "r") as f:
                     data = json.load(f)
-                    self.stats = data.get(str(self.guild_id), {"total_played": 0, "tracks": {}})
+                    guild_stats = data.get(str(self.guild_id), {})
+                    self.stats = guild_stats.get("stats", {"total_played": 0, "tracks": {}})
+                    self.history = guild_stats.get("history", [])
         except Exception as e:
             print(f"Error loading stats: {e}")
 
@@ -114,7 +117,10 @@ class GuildState:
                 with open("music_stats.json", "r") as f:
                     data = json.load(f)
             
-            data[str(self.guild_id)] = self.stats
+            data[str(self.guild_id)] = {
+                "stats": self.stats,
+                "history": self.history
+            }
             
             with open("music_stats.json", "w") as f:
                 json.dump(data, f, indent=4)
@@ -321,6 +327,18 @@ class Music(commands.Cog):
         state.stats["total_played"] += 1
         title = song.get("title", "Unknown")
         state.stats["tracks"][title] = state.stats["tracks"].get(title, 0) + 1
+        
+        # Update History
+        history_item = {
+            "title": song.get("title", "Unknown"),
+            "thumbnail": song.get("thumbnail"),
+            "requester": song.get("requester"),
+            "timestamp": asyncio.get_event_loop().time()
+        }
+        state.history.insert(0, history_item)
+        if len(state.history) > 20:
+            state.history.pop()
+            
         state.save_stats()
         state.elapsed_before_pause = 0
         
