@@ -19,9 +19,12 @@ class MusicBot(commands.Bot):
 
     async def setup_hook(self):
         await self.add_cog(Music(self))
-        # Sync all commands
-        await self.tree.sync()
-        print("[OK] Commands synced")
+        # Sync all commands (Safe Mode)
+        try:
+            await self.tree.sync()
+            print("[OK] Commands synced")
+        except Exception as e:
+            print(f"[WARN] Command sync skipped (Rate Limit/Error): {e}")
         
         # Connect bot to API bridge on port 8001
         api_bridge.bot_instance = self
