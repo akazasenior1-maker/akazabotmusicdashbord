@@ -252,7 +252,7 @@ async def get_servers(token: str):
              async with httpx.AsyncClient() as client:
                 try:
                     # Proxy the request to the Bot process
-                    r = await client.get(f"http://127.0.0.1:8001/api/servers?token={token}")
+                    r = await client.get(f"http://127.0.0.1:8001/api/servers?token={token}", timeout=10.0)
                     if r.status_code == 200:
                         return r.json()
                 except Exception as e:
@@ -324,7 +324,7 @@ async def get_server_status(guild_id: int, token: str):
         # Proxy to Bot
         async with httpx.AsyncClient() as client:
             try:
-                r = await client.get(f"http://127.0.0.1:8001/api/server/{guild_id}/status?token={token}")
+                r = await client.get(f"http://127.0.0.1:8001/api/server/{guild_id}/status?token={token}", timeout=10.0)
                 return JSONResponse(status_code=r.status_code, content=r.json())
             except Exception as e:
                 return JSONResponse(status_code=503, content={"detail": "Bot unreachable"})
@@ -385,7 +385,7 @@ async def update_settings(guild_id: int, params: Dict, token: str):
         # Proxy to Bot
         async with httpx.AsyncClient() as client:
             try:
-                r = await client.post(f"http://127.0.0.1:8001/api/server/{guild_id}/settings?token={token}", json=params)
+                r = await client.post(f"http://127.0.0.1:8001/api/server/{guild_id}/settings?token={token}", json=params, timeout=10.0)
                 return JSONResponse(status_code=r.status_code, content=r.json())
             except Exception as e:
                 return JSONResponse(status_code=503, content={"detail": "Bot unreachable"})
@@ -430,7 +430,7 @@ async def control_bot(guild_id: int, action: str, params: ControlParams):
             # Proxy to Bot
             async with httpx.AsyncClient() as client:
                 try:
-                    r = await client.post(f"http://127.0.0.1:8001/api/server/{guild_id}/control?action={action}", json=params.dict())
+                    r = await client.post(f"http://127.0.0.1:8001/api/server/{guild_id}/control?action={action}", json=params.dict(), timeout=60.0)
                     return JSONResponse(status_code=r.status_code, content=r.json())
                 except Exception as e:
                     return JSONResponse(status_code=503, content={"detail": "Bot unreachable"})
