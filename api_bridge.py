@@ -48,28 +48,24 @@ async def startup_event():
         asyncio.create_task(bot_watchdog())
 
 async def bot_watchdog():
+    print("[INFO] Bot Watchdog Active.")
     while True:
         try:
-            # Check if bot is alive via process poll
             global bot_process
-            should_start = False
             
             if bot_process:
                 if bot_process.poll() is not None:
-                    print(f"[WARN] Bot process ended. Cleaning up...")
-                    await cleanup_bot_processes()
+                    print(f"[WARN] Bot process ended (Code: {bot_process.returncode}). Restarting...")
                     bot_process = None
-                    should_start = True
-                else:
-                    # Still running, wait
-                    await asyncio.sleep(15)
+                    await start_bot_internal()
             else:
-                should_start = True
+                # Check via API if instance is missing
+                status = await get_bot_status()
+                if not status["is_running"]:
+                    print("[INFO] Bot process not found. Starting core...")
+                    await start_bot_internal()
 
-            if should_start:
-                print("[INFO] Starting Bot...")
-                await start_bot_internal()
-                await asyncio.sleep(10) # Give it time to boot
+            await asyncio.sleep(15) 
                 
         except Exception as e:
             print(f"[ERROR] Watchdog error: {e}")
@@ -156,9 +152,9 @@ async def verify_token(token: str):
                 raise HTTPException(status_code=r.status_code, detail="Discord API unreachable")
         except Exception as e:
             if isinstance(e, HTTPException): raise e
-            print(f"[ERROR] Exception in verify_token: {e}")
-            # Grace period for network issues
-            if token in cache_data and now - cache_data[token]["time"] < 1800:
+            print(f"[ERROR] verify_token failed: {e}")
+            # Cache fallback logic (grace period for Discord API lag)
+            if token in cache_data and now - cache_data[token]["time"] < 3600:
                 return cache_data[token]["user"]
             raise HTTPException(status_code=500, detail="Identity verification failed")
 

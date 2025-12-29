@@ -96,9 +96,37 @@ class MusicBot(commands.Bot):
 
 bot = MusicBot()
 
-@bot.event
-async def on_ready():
-    print(f"[OK] Bot logged in as {bot.user}")
+    @bot.event
+    async def on_voice_state_update(member, before, after):
+        if member.id == bot.user.id:
+            # If bot was moved or disconnected manually
+            if not after.channel:
+                # Cleanup state
+                music_cog = bot.get_cog("Music")
+                if music_cog:
+                    state = music_cog.get_state(member.guild.id)
+                    state.queue.clear()
+                    state.current_song = None
+                    state.voice_client = None
+                    bot.dispatch_dashboard_update(member.guild.id)
+            else:
+                # Update status if moved to new channel
+                bot.dispatch_dashboard_update(member.guild.id)
 
-if __name__ == "__main__":
+    @bot.event
+    async def on_ready():
+        print(f"[OK] Bot logged in as {bot.user}")
+        # Periodic Sync for all active guilds to keep Dashboard time accurate
+        bot.loop.create_task(periodic_sync())
+
+    async def periodic_sync():
+        while True:
+            await asyncio.sleep(10)
+            music_cog = bot.get_cog("Music")
+            if music_cog:
+                for guild_id in list(music_cog.guild_states.keys()):
+                    state = music_cog.get_state(guild_id)
+                    if state.voice_client and (state.voice_client.is_playing() or state.voice_client.is_paused()):
+                        bot.dispatch_dashboard_update(guild_id)
+
     bot.run(config.TOKEN)

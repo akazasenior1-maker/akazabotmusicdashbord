@@ -1,5 +1,5 @@
-discord.py
-yt-dlp>=2024.12.23
+discord.py>=2.4.0
+yt-dlp>=2025.01.12
 PyNaCl
 fastapi
 uvicorn[standard]
@@ -7,3 +7,4 @@ httpx
 python-multipart
 psutil
 pydantic
+aiohttp

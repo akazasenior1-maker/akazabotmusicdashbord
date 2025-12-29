@@ -7,6 +7,11 @@ import os
 import json
 import gc
 import random
+import logging
+
+# Configure Advanced Logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("AkazaMusic")
 
 # FFmpeg path
 FFMPEG_PATH = "ffmpeg" # Default to system path (Linux/Render)
@@ -22,25 +27,26 @@ ydl_opts_base = {
     "source_address": "0.0.0.0",
     "extract_flat": "in_playlist",
     "nocheckcertificate": True,
-    "ignoreerrors": False,
+    "ignoreerrors": True,
     "logtostderr": False,
     "no_color": True,
     "no_playlist": True,
     "default_search": "ytsearch",
-    "socket_timeout": 20,
+    "socket_timeout": 15,
     "cachedir": False,
     "http_headers": {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Sec-Fetch-Mode": "navigate",
     },
-    # Extracted VisitorData to mimic a real browser session
     "visitor_data": "CgtqbkZNQVdRUEZ6cyj5hMjKBjIKCgJUThIEGgAgWmLfAgrcAjE0LllUPVJCUUV5Y0lzT2VGb01vT29rOFd2NDBTX2Nld1RJVkNjT1A4VVRWSXk4OGxmRy1nZGxWZFVWd2x4dER1cEZfUEJReU5WajVEbXBaajhLcGxqaExKM3lIWl9ySGNXalhSSEd2ZVJ6elVHVDFIdGlmYzJGcXk5OG9vUlQ2LWxXMnlvSmNrY0tWTmtwamdLcF92RlVySWY4YXo3TjB6R2k3WF9KM2FpVHpCdW5RdTEyUlJIWGwySVh5cUkzQ0NnczIwSE9NM0NNRldRVGgwSS0xQ2owUXR5ZDY2RlZHV3cxLVI1bkFlTzF4MXBMRkFCVTViYjhwNnNHYTQ1N2pNMUIzSlRzYUI1aEhSdnVXZ2V0V0tPaXFaREJZWGQ1UUp5WVVXSGlkaWlUUFFyNmllSS13ekdvRWFjMzVkd0x3dDNGMzQzbTNqeTJNWnktSlU0R3ZvczBFeHBPdw=="
 }
 
-# Advanced Evasion Clients - Order matters for Render
+# Optimized Extraction Clients
 extraction_clients = [
-    {"extractor_args": {"youtube": {"client": ["tvhtml5", "web_creator"]}}}, # TV/Creator clients have much lower bot detection
-    {"extractor_args": {"youtube": {"client": ["android", "ios"]}}},        # Mobile (good fallback)
-    {"extractor_args": {"youtube": {"client": ["mweb", "web"]}}},            # Standards (last resort)
+    {"extractor_args": {"youtube": {"client": ["android", "ios", "tvhtml5"]}}}, 
+    {"extractor_args": {"youtube": {"client": ["web_creator", "web"]}}},
 ]
 
 # Check for cookies.txt to bypass "bot detection" on Render
@@ -50,9 +56,11 @@ if os.path.exists(COOKIES_PATH):
     print("[INFO] YouTube cookies detected.")
 ffmpeg_opts = {
     "executable": FFMPEG_PATH,
-    "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
-    "options": "-vn"
+    "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -probesize 10M -analyzeduration 10M",
+    "options": "-vn -b:a 128k -ar 48000 -ac 2" 
 }
+# Quality Note: 128k is optimal for Discord streaming balance. 
+# probesize/analyzeduration helps with fast stream start without stutters.
 
 class GuildState:
     def __init__(self, guild_id, cog):
@@ -70,7 +78,11 @@ class GuildState:
         self.elapsed_before_pause = 0
         self.stats = {"total_played": 0, "tracks": {}}
         self.eq_gains = {"low": 0, "mid": 0, "high": 0}
-        self.history = [] # Last played songs
+        self.history = []
+        
+        # Concurrency Lock
+        self.lock = asyncio.Lock()
+        
         self.load_settings()
         self.load_stats()
 
@@ -86,6 +98,7 @@ class GuildState:
             print(f"Error loading stats: {e}")
 
     def save_stats(self):
+        """Atomic save for music statistics to prevent corruption."""
         try:
             data = {}
             if os.path.exists("music_stats.json"):
@@ -97,10 +110,12 @@ class GuildState:
                 "history": self.history
             }
             
-            with open("music_stats.json", "w") as f:
+            # Temporary file used for atomic write
+            with open("music_stats.json.tmp", "w") as f:
                 json.dump(data, f, indent=4)
+            os.replace("music_stats.json.tmp", "music_stats.json")
         except Exception as e:
-            print(f"Error saving stats: {e}")
+            logger.error(f"Failed to save stats for guild {self.guild_id}: {e}")
 
     def load_settings(self):
         try:
@@ -151,15 +166,26 @@ class Music(commands.Cog):
 
         vc = guild.voice_client
         if not vc:
-            # If not connected, we need to find a channel. 
-            # We'll try to find the last active voice channel or a random one.
+            # Senior logic: check if requester is in a voice channel first
+            # Since we don't always know requester's member object in API call, 
+            # we fallback to finding ANY populated channel.
+            target_channel = None
             for channel in guild.voice_channels:
                 if len(channel.members) > 0:
-                    vc = await channel.connect()
-                    state.voice_client = vc
+                    target_channel = channel
                     break
-            if not vc:
-                return {"error": "Bot is not in a voice channel and no active channels found."}
+            
+            if not target_channel and len(guild.voice_channels) > 0:
+                target_channel = guild.voice_channels[0]
+            
+            if target_channel:
+                try:
+                    vc = await target_channel.connect(timeout=20.0, reconnect=True)
+                    state.voice_client = vc
+                except Exception as e:
+                    return {"error": f"Failed to connect to voice: {e}"}
+            else:
+                return {"error": "No voice channels available in this server."}
 
         try:
             loop = asyncio.get_event_loop()
@@ -171,20 +197,26 @@ class Music(commands.Cog):
             def extract(q):
                 last_err = None
                 for client_config in extraction_clients:
-                    # Random delay between 1-3 seconds to mimic human search
-                    time_to_wait = random.uniform(1.0, 3.0)
-                    asyncio.run_coroutine_threadsafe(asyncio.sleep(time_to_wait), loop)
-                    
-                    opts = ydl_opts_base.copy()
-                    opts.update(client_config)
-                    try:
-                        with yt_dlp.YoutubeDL(opts) as ydl:
-                            return ydl.extract_info(f"ytsearch:{q}" if not q.startswith("http") else q, download=False)
-                    except Exception as e:
-                        last_err = e
-                        print(f"[WARN] Extraction failed with {client_config.get('extractor_args')}: {e}")
-                        continue # Try next client
-                raise last_err # If all clients fail
+                    # Logic: Each client has 2 retries on network transient errors
+                    for attempt in range(2):
+                        time_to_wait = random.uniform(1.0, 2.5)
+                        asyncio.run_coroutine_threadsafe(asyncio.sleep(time_to_wait), loop)
+                        
+                        opts = ydl_opts_base.copy()
+                        opts.update(client_config)
+                        try:
+                            with yt_dlp.YoutubeDL(opts) as ydl:
+                                return ydl.extract_info(f"ytsearch:{q}" if not q.startswith("http") else q, download=False)
+                        except Exception as e:
+                            last_err = e
+                            err_str = str(e).lower()
+                            # If it's a "Blocked" or "Private" or "Sign in" error, try next client immediately
+                            if any(x in err_str for x in ["blocked", "private", "sign in", "confirm you're not a bot"]):
+                                print(f"[WARN] Client {client_config} blocked. Switching...")
+                                break 
+                            print(f"[WARN] Extraction attempt {attempt+1} failed: {e}")
+                            continue # Retry current client
+                raise last_err 
             
             # Run blocking extraction in executor
             info = await loop.run_in_executor(None, extract, query)
@@ -193,7 +225,11 @@ class Music(commands.Cog):
                 return {"error": "Could not extract song info."}
 
             if 'entries' in info:
-                info = info['entries'][0]
+                # Filter out None entries if it's a list
+                valid_entries = [e for e in info['entries'] if e]
+                if not valid_entries:
+                    return {"error": "No playable entries found."}
+                info = valid_entries[0]
             
             song_info = {
                 "url": info["url"],
@@ -204,25 +240,27 @@ class Music(commands.Cog):
                 "original_url": info.get("webpage_url", query)
             }
 
-            # Memory Safety: Limit queue size to 50
-            if len(state.queue) >= 50:
-                return {"error": "Queue limit exceeded (50 tracks). Clear some tracks before adding more."}
+            # Memory Safety: Limit queue size to 100
+            if len(state.queue) >= 100:
+                return {"error": "Queue limit exceeded (100 tracks)."}
 
             state.queue.append(song_info)
             
-            # Explicitly clear 'info' and trigger GC to free memory after heavy extraction
-            del info
+            # Explicitly clear 'info' and trigger GC
+            info = None
             gc.collect()
 
-            if not vc.is_playing() and not vc.is_paused():
-                await self.play_next(guild_id)
+            async with state.lock:
+                if not vc.is_playing() and not vc.is_paused():
+                    await self.play_next(guild_id)
             
             if hasattr(self.bot, 'dispatch_dashboard_update'):
                 self.bot.dispatch_dashboard_update(guild_id)
             return {"status": "ok", "song": song_info}
         except Exception as e:
-            gc.collect() # Ensure cleanup on error
-            return {"error": str(e)}
+            print(f"[ERROR] API Play Exception: {e}")
+            gc.collect()
+            return {"error": "Extraction failed. Try a different link or title."}
 
     def get_filters(self, state):
         filters = []
@@ -238,6 +276,10 @@ class Music(commands.Cog):
         return filters
 
     async def refresh_playback(self, guild_id):
+        """
+        Hot-restarts the audio stream with updated filters (Equalizer/Bass Boost)
+        without skipping the song. Calculates elapsed time for perfect resume.
+        """
         state = self.get_state(guild_id)
         guild = self.bot.get_guild(guild_id)
         if not guild or not guild.voice_client: return
@@ -263,19 +305,24 @@ class Music(commands.Cog):
         if filters:
             options["options"] += f" -af \"{','.join(filters)}\""
 
-        source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(state.current_song["url"], **options))
-        source.volume = state.volume
-        
-        state.start_time = asyncio.get_event_loop().time()
-        state.elapsed_before_pause = elapsed
+        try:
+            source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(state.current_song["url"], **options))
+            source.volume = state.volume
+            
+            state.start_time = asyncio.get_event_loop().time()
+            state.elapsed_before_pause = elapsed
 
-        def after_playing(error):
-            coro = self.play_next(guild_id)
-            asyncio.run_coroutine_threadsafe(coro, self.bot.loop)
+            def after_playing(error):
+                if error:
+                    print(f"[ERROR] Playback error in refresh_playback: {error}")
+                coro = self.play_next(guild_id)
+                asyncio.run_coroutine_threadsafe(coro, self.bot.loop)
 
-        vc.play(source, after=after_playing)
-        if state.is_paused:
-            vc.pause()
+            vc.play(source, after=after_playing)
+            if state.is_paused:
+                vc.pause()
+        except Exception as e:
+            print(f"[CRITICAL] Failed to refresh playback: {e}")
         
         if hasattr(self.bot, 'dispatch_dashboard_update'):
             self.bot.dispatch_dashboard_update(guild_id)
@@ -307,57 +354,73 @@ class Music(commands.Cog):
 
     async def play_next(self, guild_id, channel=None):
         state = self.get_state(guild_id)
-        guild = self.bot.get_guild(guild_id)
-        if not guild: return
-        vc = state.voice_client or guild.voice_client
-        
-        if not vc: return
-
-        if not state.queue:
-            state.current_song = None
-            return
-
-        song = state.queue.pop(0)
-        state.current_song = song
-        state.start_time = asyncio.get_event_loop().time()
-        state.elapsed_before_pause = 0
-        
-        # Update Stats
-        state.stats["total_played"] += 1
-        title = song.get("title", "Unknown")
-        state.stats["tracks"][title] = state.stats["tracks"].get(title, 0) + 1
-        
-        # Update History
-        history_item = {
-            "title": song.get("title", "Unknown"),
-            "thumbnail": song.get("thumbnail"),
-            "requester": song.get("requester"),
-            "timestamp": asyncio.get_event_loop().time()
-        }
-        state.history.insert(0, history_item)
-        if len(state.history) > 20:
-            state.history.pop()
+        async with state.lock:
+            guild = self.bot.get_guild(guild_id)
+            if not guild: return
+            vc = state.voice_client or guild.voice_client
             
-        state.save_stats()
-        state.elapsed_before_pause = 0
-        
-        
-        # Build Filter Chain
-        filters = self.get_filters(state)
+            if not vc: return
 
-        options = ffmpeg_opts.copy()
-        if filters:
-            options["options"] += f" -af \"{','.join(filters)}\""
+            if not state.queue:
+                state.current_song = None
+                if hasattr(self.bot, 'dispatch_dashboard_update'):
+                    self.bot.dispatch_dashboard_update(guild_id)
+                return
 
-        source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(song["url"], **options))
-        source.volume = state.volume
-        
-        def after_playing(error):
-            coro = self.play_next(guild_id, channel)
-            asyncio.run_coroutine_threadsafe(coro, self.bot.loop)
+            song = state.queue.pop(0)
+            state.current_song = song
+            state.start_time = asyncio.get_event_loop().time()
+            state.elapsed_before_pause = 0
+            
+            # Update Stats
+            state.stats["total_played"] += 1
+            title = song.get("title", "Unknown")
+            state.stats["tracks"][title] = state.stats["tracks"].get(title, 0) + 1
+            
+            # Update History
+            history_item = {
+                "title": song.get("title", "Unknown"),
+                "thumbnail": song.get("thumbnail"),
+                "requester": song.get("requester"),
+                "timestamp": asyncio.get_event_loop().time()
+            }
+            state.history.insert(0, history_item)
+            if len(state.history) > 20:
+                state.history.pop()
+                
+            state.save_stats()
+            state.elapsed_before_pause = 0
+            
+            # Build Filter Chain
+            filters = self.get_filters(state)
+            options = ffmpeg_opts.copy()
+            if filters:
+                options["options"] += f" -af \"{','.join(filters)}\""
 
-        vc.play(source, after=after_playing)
-        state.is_paused = False
+            try:
+                source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(song["url"], **options))
+                source.volume = state.volume
+                
+                def after_playing(error):
+                    if error:
+                        print(f"[ERROR] Player Error: {error}")
+                    self.bot.loop.create_task(self._delayed_next(guild_id, channel))
+
+                if vc.is_playing() or vc.is_paused():
+                    vc.stop()
+
+                vc.play(source, after=after_playing)
+                state.is_paused = False
+            except Exception as e:
+                print(f"[ERROR] Failed to play track {song.get('title')}: {e}")
+                self.bot.loop.create_task(self.play_next(guild_id, channel))
+            
+            if hasattr(self.bot, 'dispatch_dashboard_update'):
+                self.bot.dispatch_dashboard_update(guild_id)
+
+    async def _delayed_next(self, guild_id, channel):
+        await asyncio.sleep(1) # Gap between songs for stability
+        await self.play_next(guild_id, channel)
         
         # Notify API via WebSocket (we'll implement this bridge soon)
         if hasattr(self.bot, 'dispatch_dashboard_update'):
