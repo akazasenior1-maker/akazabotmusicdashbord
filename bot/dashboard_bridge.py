@@ -143,6 +143,16 @@ class DashboardBridge:
                 if guild_id in self.active_websockets:
                     self.active_websockets[guild_id].remove(websocket)
 
+        @self.app.get("/api/bot/status")
+        async def get_bot_global_status():
+            """Returns the overall health of the bot process."""
+            return {
+                "is_running": True,
+                "bot_ready": self.bot.is_ready(),
+                "latency": round(self.bot.latency * 1000, 2) if self.bot.is_ready() else 0,
+                "engine": "Akaza Senior V3 (Unified Process)"
+            }
+
         @self.app.post("/api/server/{guild_id}/control")
         async def control_bot(guild_id: int, action: str, params: dict = None):
             if not self.bot.is_ready():
