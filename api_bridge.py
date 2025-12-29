@@ -306,7 +306,7 @@ async def get_server_status(guild_id: int, token: str):
                 r = await client.get(f"http://localhost:8001/api/server/{guild_id}/status?token={token}")
                 return JSONResponse(status_code=r.status_code, content=r.json())
             except Exception as e:
-                return JSONResponse(status_code=503, content={"error": "Bot unreachable"})
+                return JSONResponse(status_code=503, content={"detail": "Bot unreachable"})
 
     # Bot implementation
     try:
@@ -367,7 +367,7 @@ async def update_settings(guild_id: int, params: Dict, token: str):
                 r = await client.post(f"http://localhost:8001/api/server/{guild_id}/settings?token={token}", json=params)
                 return JSONResponse(status_code=r.status_code, content=r.json())
             except Exception as e:
-                return JSONResponse(status_code=503, content={"error": "Bot unreachable"})
+                return JSONResponse(status_code=503, content={"detail": "Bot unreachable"})
 
     # Bot implementation
     bot = get_bot()
@@ -412,7 +412,7 @@ async def control_bot(guild_id: int, action: str, params: ControlParams):
                     r = await client.post(f"http://localhost:8001/api/server/{guild_id}/control?action={action}", json=params.dict())
                     return JSONResponse(status_code=r.status_code, content=r.json())
                 except Exception as e:
-                    return JSONResponse(status_code=503, content={"error": "Bot unreachable"})
+                    return JSONResponse(status_code=503, content={"detail": "Bot unreachable"})
 
         # Bot implementation
         bot = get_bot()
