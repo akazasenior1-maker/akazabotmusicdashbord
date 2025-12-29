@@ -137,6 +137,9 @@ class Music(commands.Cog):
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(f"ytsearch:{query}" if not query.startswith("http") else query, download=False)
+                if not info:
+                    return {"error": "Could not extract song info."}
+                
                 if 'entries' in info:
                     info = info['entries'][0]
                 
