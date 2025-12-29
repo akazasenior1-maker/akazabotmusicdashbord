@@ -1,4 +1,11 @@
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import httpx
+import asyncio
+import json
+import time
+from typing import Dict, List
 from .config import CLIENT_ID, CLIENT_SECRET, REDIRECT_URI
 
 class DashboardBridge:
@@ -20,6 +27,10 @@ class DashboardBridge:
         )
         
         self.setup_routes()
+        
+        # Serve static files for the dashboard
+        # This must be mounted AFTER routes or using a specific order
+        self.app.mount("/", StaticFiles(directory="dashboard/frontend", html=True), name="frontend")
 
     def setup_routes(self):
         @self.app.get("/auth/login")
