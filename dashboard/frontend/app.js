@@ -32,27 +32,14 @@ const ctx = canvas ? canvas.getContext('2d') : null;
 
 // Init
 window.onload = async () => {
-    // Welcome Screen Logic
-    const enterBtn = document.getElementById('enter-system-btn');
-    if (enterBtn) {
-        enterBtn.onclick = () => {
-            const welcome = document.getElementById('welcome-screen');
-            welcome.style.transition = 'opacity 1s ease, transform 1s ease';
-            welcome.style.opacity = '0';
-            welcome.style.transform = 'scale(1.2)';
-
-            setTimeout(() => {
-                welcome.classList.remove('active');
-                initAppFlow();
-            }, 1000);
-        };
-    }
-
     if (window.location.protocol === 'file:') {
         alert("CRITICAL UPLINK ERROR:\nYou are opening the file directly. Please visit http://localhost:8000 in your browser after starting the bot.");
     }
 
     if (canvas) setupWaveform();
+
+    // Start the app flow immediately without welcome screen
+    initAppFlow();
 };
 
 async function initAppFlow() {
