@@ -229,7 +229,7 @@ async def get_servers(token: str):
         # but for server list, we can just use the token to get guilds from Discord
         
         cache_key = f"guilds_{token}"
-        if cache_key in cache_data and asyncio.get_event_loop().time() - cache_data[cache_key]["time"] < 60:
+        if cache_key in cache_data and asyncio.get_event_loop().time() - cache_data[cache_key]["time"] < 5:
             return cache_data[cache_key]["guilds"]
 
         async with httpx.AsyncClient() as client:

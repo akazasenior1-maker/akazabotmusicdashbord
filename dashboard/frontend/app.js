@@ -477,6 +477,13 @@ async function updateBotStatus() {
         }
     } catch (err) {
         console.error("Bot status polling error", err);
+        const light = document.getElementById('bot-status-light');
+        const text = document.getElementById('bot-status-text');
+        if (light && text) {
+            light.className = 'status-light off';
+            text.className = 'neon-text-red';
+            text.textContent = 'CONNECTION LOST';
+        }
     }
 }
 
