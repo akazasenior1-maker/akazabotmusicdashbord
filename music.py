@@ -88,8 +88,9 @@ class GuildState:
 
     def load_stats(self):
         try:
-            if os.path.exists("music_stats.json"):
-                with open("music_stats.json", "r") as f:
+            path = os.path.join("data", "music_stats.json")
+            if os.path.exists(path):
+                with open(path, "r") as f:
                     data = json.load(f)
                     guild_stats = data.get(str(self.guild_id), {})
                     self.stats = guild_stats.get("stats", {"total_played": 0, "tracks": {}})
@@ -101,8 +102,9 @@ class GuildState:
         """Atomic save for music statistics to prevent corruption."""
         try:
             data = {}
-            if os.path.exists("music_stats.json"):
-                with open("music_stats.json", "r") as f:
+            path = os.path.join("data", "music_stats.json")
+            if os.path.exists(path):
+                with open(path, "r") as f:
                     data = json.load(f)
             
             data[str(self.guild_id)] = {
@@ -111,16 +113,18 @@ class GuildState:
             }
             
             # Temporary file used for atomic write
-            with open("music_stats.json.tmp", "w") as f:
+            tmp_path = os.path.join("data", "music_stats.json.tmp")
+            with open(tmp_path, "w") as f:
                 json.dump(data, f, indent=4)
-            os.replace("music_stats.json.tmp", "music_stats.json")
+            os.replace(tmp_path, os.path.join("data", "music_stats.json"))
         except Exception as e:
             logger.error(f"Failed to save stats for guild {self.guild_id}: {e}")
 
     def load_settings(self):
         try:
-            if os.path.exists("settings.json"):
-                with open("settings.json", "r") as f:
+            path = os.path.join("data", "settings.json")
+            if os.path.exists(path):
+                with open(path, "r") as f:
                     data = json.load(f)
                     guild_data = data.get(str(self.guild_id), {})
                     self.volume = guild_data.get("volume", 1.0)
@@ -133,8 +137,9 @@ class GuildState:
     def save_settings(self):
         try:
             data = {}
-            if os.path.exists("settings.json"):
-                with open("settings.json", "r") as f:
+            path = os.path.join("data", "settings.json")
+            if os.path.exists(path):
+                with open(path, "r") as f:
                     data = json.load(f)
             
             data[str(self.guild_id)] = {
@@ -144,10 +149,10 @@ class GuildState:
                 "eq_gains": self.eq_gains
             }
             
-            with open("settings.json", "w") as f:
+            with open(os.path.join("data", "settings.json"), "w") as f:
                 json.dump(data, f, indent=4)
         except Exception as e:
-            print(f"Error saving settings: {e}")
+            logger.error(f"Error saving settings: {e}")
 
 class Music(commands.Cog):
     def __init__(self, bot):
