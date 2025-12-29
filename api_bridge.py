@@ -226,7 +226,20 @@ async def get_servers(token: str):
         # and then let the frontend handle the "bot not connected" states.
         # But for the "bot_in" flag, let's keep it simple: if manager, we might not know.
         
-        if LISTENING_PORT == 8000:
+        # Manager Proxy Logic: If we are manager (no bot instance), proxy to bot for accurate role checks
+        if bot_instance is None:
+             async with httpx.AsyncClient() as client:
+                try:
+                    # Proxy the request to the Bot process
+                    r = await client.get(f"http://localhost:8001/api/servers?token={token}")
+                    if r.status_code == 200:
+                        return r.json()
+                except Exception as e:
+                    print(f"[WARN] Failed to proxy get_servers to bot: {e}")
+                    # Fallback to local admin check if bot is down
+        
+        # Fallback / Local Manager Logic (if proxy failed or we just want basic admin check)
+        if LISTENING_PORT == 8000 or bot_instance is None:
             # Manager logic: assume bot is in if user is admin for now, 
             # or try to probe the bot API
             for guild in guilds:
@@ -286,7 +299,7 @@ async def get_servers(token: str):
 async def get_server_status(guild_id: int, token: str):
     await verify_token(token)
     
-    if LISTENING_PORT == 8000:
+    if bot_instance is None:
         # Proxy to Bot
         async with httpx.AsyncClient() as client:
             try:
@@ -347,7 +360,7 @@ async def get_server_status(guild_id: int, token: str):
 async def update_settings(guild_id: int, params: Dict, token: str):
     await verify_token(token)
     
-    if LISTENING_PORT == 8000:
+    if bot_instance is None:
         # Proxy to Bot
         async with httpx.AsyncClient() as client:
             try:
@@ -392,7 +405,7 @@ async def control_bot(guild_id: int, action: str, params: ControlParams):
     try:
         user = await verify_token(params.token)
         
-        if LISTENING_PORT == 8000:
+        if bot_instance is None:
             # Proxy to Bot
             async with httpx.AsyncClient() as client:
                 try:
