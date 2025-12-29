@@ -6,6 +6,7 @@ import asyncio
 import os
 import json
 import gc
+import random
 
 # FFmpeg path
 FFMPEG_PATH = "ffmpeg" # Default to system path (Linux/Render)
@@ -14,7 +15,7 @@ LOCAL_FFMPEG = os.path.join(os.path.dirname(__file__), "ffmpeg-8.0.1-essentials_
 if os.path.exists(LOCAL_FFMPEG):
     FFMPEG_PATH = LOCAL_FFMPEG
 
-ydl_opts = {
+ydl_opts_base = {
     "format": "bestaudio/best",
     "quiet": True,
     "no_warnings": True,
@@ -26,20 +27,25 @@ ydl_opts = {
     "no_color": True,
     "no_playlist": True,
     "default_search": "ytsearch",
-    "socket_timeout": 10,
+    "socket_timeout": 15,
     "cachedir": False,
     "http_headers": {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-us,en;q=0.5",
-        "Sec-Fetch-Mode": "navigate",
     }
 }
 
+# Advanced Evasion Clients
+extraction_clients = [
+    {"extractor_args": {"youtube": {"client": ["android", "ios"]}}}, # Mobile first (usually less restricted)
+    {"extractor_args": {"youtube": {"client": ["web"]}}},            # Standard web
+    {"extractor_args": {"youtube": {"client": ["mweb"]}}},           # Mobile web fallback
+]
+
 # Check for cookies.txt to bypass "bot detection" on Render
-if os.path.exists("cookies.txt"):
-    ydl_opts["cookiefile"] = "cookies.txt"
-    print("[INFO] YouTube cookies loaded from cookies.txt")
+COOKIES_PATH = "cookies.txt"
+if os.path.exists(COOKIES_PATH):
+    ydl_opts_base["cookiefile"] = COOKIES_PATH
+    print("[INFO] YouTube cookies detected.")
 ffmpeg_opts = {
     "executable": FFMPEG_PATH,
     "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
@@ -161,8 +167,22 @@ class Music(commands.Cog):
             # It's safer to wrap the entire extraction function.
             
             def extract(q):
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    return ydl.extract_info(f"ytsearch:{q}" if not q.startswith("http") else q, download=False)
+                last_err = None
+                for client_config in extraction_clients:
+                    # Random delay between 1-3 seconds to mimic human search
+                    time_to_wait = random.uniform(1.0, 3.0)
+                    asyncio.run_coroutine_threadsafe(asyncio.sleep(time_to_wait), loop)
+                    
+                    opts = ydl_opts_base.copy()
+                    opts.update(client_config)
+                    try:
+                        with yt_dlp.YoutubeDL(opts) as ydl:
+                            return ydl.extract_info(f"ytsearch:{q}" if not q.startswith("http") else q, download=False)
+                    except Exception as e:
+                        last_err = e
+                        print(f"[WARN] Extraction failed with {client_config.get('extractor_args')}: {e}")
+                        continue # Try next client
+                raise last_err # If all clients fail
             
             # Run blocking extraction in executor
             info = await loop.run_in_executor(None, extract, query)
