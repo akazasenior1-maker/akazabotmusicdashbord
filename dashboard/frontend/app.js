@@ -446,11 +446,15 @@ function addSystemLog(msg, type = '') {
     log.scrollTop = log.scrollHeight;
 }
 
+startBotStatusPolling();
+
 async function startBotStatusPolling() {
     if (botStatusInterval) clearInterval(botStatusInterval);
     updateBotStatus();
     botStatusInterval = setInterval(updateBotStatus, 5000);
 }
+
+let lastBotState = "unknown"; // "online", "starting", "offline"
 
 async function updateBotStatus() {
     try {
@@ -460,21 +464,35 @@ async function updateBotStatus() {
 
         if (!light || !text) return;
 
+        let currentState = "offline";
+
         if (status.is_running) {
             if (status.bot_ready) {
                 light.className = 'status-light online';
                 text.className = 'neon-text-green';
                 text.textContent = 'ONLINE';
+                currentState = "online";
             } else {
                 light.className = 'status-light starting';
                 text.className = 'neon-text-blue';
                 text.textContent = 'INITIALIZING...';
+                currentState = "starting";
             }
         } else {
             light.className = 'status-light off';
             text.className = 'neon-text-red';
             text.textContent = 'OFFLINE';
+            currentState = "offline";
         }
+
+        // Smart Logging: Log only on state changes
+        if (lastBotState !== "unknown" && lastBotState !== currentState) {
+            if (currentState === "online") addSystemLog("Systems recovered. Bot is operational.", "success");
+            if (currentState === "offline") addSystemLog("Heartbeat lost. Watchdog searching...", "error");
+            if (currentState === "starting") addSystemLog("Core process detected. Initializing...", "info");
+        }
+        lastBotState = currentState;
+
     } catch (err) {
         console.error("Bot status polling error", err);
         const light = document.getElementById('bot-status-light');
@@ -488,23 +506,39 @@ async function updateBotStatus() {
 }
 
 safeOnclick('btn-bot-start', async () => {
-    addSystemLog("Initiating boot sequence...");
-    try {
-        await fetchAPI('/api/bot/start', 'POST');
-        addSystemLog("Bot engine command sent. Awaiting uplink...", "success");
-        updateBotStatus();
-    } catch (err) {
-        addSystemLog(`Launch failed: ${err.message}`, "error");
-    }
+    // Legacy start button (hidden)
+    addSystemLog("Manual start signal sent.");
 });
 
 safeOnclick('btn-bot-stop', async () => {
-    if (!confirm("Are you sure you want to SHUT DOWN the music core?")) return;
-    addSystemLog("Sending termination signal...");
+    if (!confirm("Are you sure you want to FORCE RESTART the system?")) return;
+
+    const btn = document.getElementById('btn-bot-stop');
+    const originalText = btn.innerHTML;
+
+    addSystemLog("Sending restart signal...");
     try {
         await fetchAPI('/api/bot/stop', 'POST');
-        addSystemLog("Systems powered down successfully.", "success");
+        addSystemLog("Kill signal acknowledged. Waiting for Watchdog...", "success");
         updateBotStatus();
+
+        // Restart Timer / Cooldown
+        btn.disabled = true;
+        let countdown = 15;
+        btn.innerHTML = `<i class="fas fa-sync fa-spin"></i> REBOOTING (${countdown}s)`;
+
+        const timer = setInterval(() => {
+            countdown--;
+            btn.innerHTML = `<i class="fas fa-sync fa-spin"></i> REBOOTING (${countdown}s)`;
+            if (countdown <= 0) {
+                clearInterval(timer);
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                addSystemLog("Reboot cycle complete. Checking status...");
+                updateBotStatus();
+            }
+        }, 1000);
+
     } catch (err) {
         addSystemLog(`Shutdown error: ${err.message}`, "error");
     }
