@@ -20,7 +20,7 @@ ydl_opts = {
     "source_address": "0.0.0.0",
     "extract_flat": "in_playlist",
     "nocheckcertificate": True,
-    "ignoreerrors": True,
+    "ignoreerrors": False,
     "logtostderr": False,
     "no_color": True,
     "no_playlist": True,
@@ -52,6 +52,51 @@ class GuildState:
         self.eq_gains = {"low": 0, "mid": 0, "high": 0}
         self.load_settings()
         self.load_stats()
+# ... (intermediate code unchanged) ...
+        try:
+            loop = asyncio.get_event_loop()
+            
+            # ydl_opts passed to constructor, but we need to create ydl instance inside executor? 
+            # No, ydl instance is not thread-safe if reused, but here we create one.
+            # It's safer to wrap the entire extraction function.
+            
+            def extract(q):
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    return ydl.extract_info(f"ytsearch:{q}" if not q.startswith("http") else q, download=False)
+            
+            # Run blocking extraction in executor
+            info = await loop.run_in_executor(None, extract, query)
+
+            if not info:
+                return {"error": "Could not extract song info (Empty result)."}
+                
+            if 'entries' in info:
+                info = info['entries'][0]
+            
+            song_info = {
+                "url": info["url"],
+                "title": info.get("title", "Unknown"),
+                "duration": info.get("duration", 0),
+                "thumbnail": info.get("thumbnail"),
+                "requester": requester,
+                "original_url": info.get("webpage_url", query)
+            }
+
+            state.queue.append(song_info)
+            if not vc.is_playing() and not vc.is_paused():
+                await self.play_next(guild_id)
+            
+            if hasattr(self.bot, 'dispatch_dashboard_update'):
+                self.bot.dispatch_dashboard_update(guild_id)
+            return {"status": "ok", "song": song_info}
+        except Exception as e:
+            # Clean up error message
+            err_msg = str(e)
+            if "Sign in to confirm your age" in err_msg:
+                return {"error": "Age restriction detected. Cannot play this song."}
+            if "403" in err_msg or "Forbidden" in err_msg:
+                return {"error": "YouTube blocked the request (403 Forbidden)."}
+            return {"error": f"Extraction failed: {err_msg}"}
 
     def load_stats(self):
         try:
