@@ -1,0 +1,9 @@
+discord.py
+yt-dlp
+PyNaCl
+fastapi
+uvicorn[standard]
+httpx
+python-multipart
+psutil
+pydantic

@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+
+# Bot specific
+settings.json
+music_stats.json
+ffmpeg-8.0.1-essentials_build/
+
+# OS
+.DS_Store
+Thumbs.db

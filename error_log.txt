@@ -1,0 +1,6 @@
+[2025-12-28 23:49:35] [INFO    ] discord.client: logging in using static token
+INFO:     Started server process [18836]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+[2025-12-28 23:50:13] [INFO    ] discord.gateway: Shard ID None has connected to Gateway (Session ID: 6ec6c772e9f8d79b7c74f79be298f8eb).
